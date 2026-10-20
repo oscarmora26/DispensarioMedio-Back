@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: dispensario-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dispensario}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dispensario}
+      POSTGRES_DB: ${POSTGRES_DB:-dispensario}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dispensario-api
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-local}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_JSON: ${LOG_JSON:-false}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-dispensario}:${POSTGRES_PASSWORD:-dispensario}@db:5432/${POSTGRES_DB:-dispensario}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

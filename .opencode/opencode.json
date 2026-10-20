@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "default_agent": "team-lead",
+  "permissions": [
+    { "action": "shell", "resource": "git push*", "effect": "deny" },
+    { "action": "shell", "resource": "git remote add*", "effect": "deny" },
+    { "action": "shell", "resource": "git remote set-url*", "effect": "deny" }
+  ],
+  "policies": [
+    { "action": "tool.use", "resource": "shell:git push *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git push --force *", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:gh pr merge *", "effect": "deny" }
+  ]
+}

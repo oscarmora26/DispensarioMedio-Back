@@ -1,0 +1,92 @@
+# ================================
+# Python
+# ================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ================================
+# Entornos virtuales
+# ================================
+.venv/
+venv/
+ENV/
+env/
+.python-version
+
+# ================================
+# FastAPI / Uvicorn / configuración local
+# ================================
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3
+.env.local
+.env.development
+.env.test
+.env.production
+logs/
+*.log
+
+# ================================
+# Testing y cobertura
+# ================================
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# ================================
+# Herramientas de tipado/lint
+# ================================
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pytype/
+.pyre/
+.hypothesis/
+
+# ================================
+# Jupyter
+# ================================
+.ipynb_checkpoints/
+
+# ================================
+# IDEs / editores
+# ================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ================================
+# Docker / otros
+# ================================
+docker-compose.override.yml
