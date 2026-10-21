@@ -12,6 +12,8 @@ dependencies = [
     "asyncpg>=0.32.0",
     "fastapi[standard]>=0.150.0",
     "pydantic-settings>=2.16.0",
+    "pwdlib[argon2]>=0.2.1",
+    "pyjwt>=2.10.0",
     "sqlalchemy[asyncio]>=2.1.5",
     "structlog>=26.1.0",
 ]

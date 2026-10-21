@@ -19,17 +19,16 @@
 
 ## Feature activa
 
-## Feature activa
-
-Ninguna. *(El `team-lead` escribe aquí el ID en `in_progress`/`in_review` y lo limpia al cerrar.)*
+Ninguna. FEAT-004 (gestión de usuarios) está `proposed` y espera aprobación humana.
 
 ## Backlog
 
 | ID | Feature | Estado | Spec | Depende de | Actualizado |
 |---|---|---|---|---|---|
 | FEAT-001 | Fundaciones de la API: scaffold, config, logging, PostgreSQL y Docker | `done` | [FEAT-001](docs/features/FEAT-001.md) | — | 2026-10-20 |
-| FEAT-002 | Autenticación y gestión de usuarios (JWT + roles) | `proposed` | pendiente | FEAT-001, FEAT-003 | 2026-10-21 |
+| FEAT-002 | Autenticación JWT: login, sesión y cambio de contraseña | `done` | [FEAT-002](docs/features/FEAT-002.md) | FEAT-001, FEAT-003 | 2026-10-21 |
 | FEAT-003 | Esquema de base de datos: modelos SQLAlchemy 2.0 y migraciones Alembic | `done` | [FEAT-003](docs/features/FEAT-003.md) | FEAT-001 | 2026-10-21 |
+| FEAT-004 | Gestión de usuarios: CRUD, roles y restablecimiento de contraseña | `proposed` | pendiente | FEAT-002 | 2026-10-21 |
 
 > FEAT-001 se ejecutó por instrucción directa del humano como línea base del proyecto, fuera del ciclo spec → implement → review.
 
@@ -59,3 +58,10 @@ proposed/approved ──(humano)──> rejected
 - 2026-10-21 — FEAT-003 registrada como `proposed` a partir de `DispensarioMedicoDocs/04-base-de-datos.md`. FEAT-002 pasa a depender de FEAT-003 (necesita `users` y `roles`).
 - 2026-10-21 — FEAT-003 **aprobada explícitamente por el humano** (incluye `audit_log`). `pg_stat_statements`/`hypopg` quedan fuera de v1.
 - 2026-10-21 — FEAT-003 `done`: reviewer emite `APPROVED` (ciclo 2/3) con 132 tests en verde, `ruff check`/`format --check` limpios y `alembic check` sin diferencias. Informe en `docs/reviews/FEAT-003.md`. Commit local `feat(FEAT-003)`. FEAT-002 queda desbloqueada.
+- 2026-10-21 — FEAT-002 **aprobada explícitamente por el humano** con alcance acotado a autenticación (`/auth/login`, `/auth/me`, `/auth/change-password`, JWT/roles y CLI `create-admin`). El CRUD de usuarios y `reset-password` se separan a FEAT-004 (`proposed`).
+- 2026-10-21 — Decisiones humanas para FEAT-002: sin refresh tokens (JWT de 30 min, ADR-003); rate limiting en login de 5 fallos/15 min por IP+usuario, en memoria y reiniciable; contraseña nueva con mínimo 8 caracteres.
+- 2026-10-21 — FEAT-002 `approved` → `in_progress`. Spec en `docs/features/FEAT-002.md` (45 CA, envelope `{detail, code, errors}`, CLI `create-admin`, plan de pruebas con aislamiento por savepoints).
+- 2026-10-21 — FEAT-002 `in_progress` → `in_review`. Implementación completa (PyJWT 2.15.1, pwdlib 0.3.1, rate limiter, CLI); `ruff` limpio, `alembic check` limpio y 131/132 tests verdes. El único fallo es el guard de FEAT-003 que prohíbe modificar `app/core/config.py`, archivo que FEAT-002 debe tocar; el reviewer lo actualiza y lo justifica.
+- 2026-10-21 — FEAT-002 `in_review` → `changes_requested` (ciclo 1/3). Reviewer escribe 67 tests nuevos (`198 passed, 1 xfailed`) y emite `CHANGES_REQUESTED`: **MAJOR** en `user_repository.find_user_by_username_or_email` (colisión username/email → `MultipleResultsFound`, el CLI devuelve 4 en vez de 1). Informe en `docs/reviews/FEAT-002.md`.
+- 2026-10-21 — FEAT-002 `changes_requested` → `in_review` (ciclo 2/3). Implementer corrige el MAJOR (`.limit(1)`), iguala el coste de Argon2 para usuarios inexistentes, elimina el parámetro muerto de `decode_access_token`, valida positividad de settings y crea el token antes del `commit()`. Suite: `198 passed, 1 failed` (solo el XPASS estricto esperado).
+- 2026-10-21 — FEAT-002 `in_review` → `done`: reviewer emite `APPROVED` (ciclo 2/3), cierra los 5 hallazgos y deja **207 tests en verde**, `ruff check`/`format --check` limpios y `alembic check` sin diferencias. Informe en `docs/reviews/FEAT-002.md`. Commit local `feat(FEAT-002)`.

@@ -656,6 +656,8 @@ def test_ca24_shared_infrastructure_files_are_not_modified() -> None:
     """CA-24 enmendado: infraestructura intacta salvo el flag de `session.py`.
 
     `feature-list.md` queda fuera del check: lo escribe el team-lead por diseno.
+    `app/core/config.py` tambien queda fuera: FEAT-002 anade ahi los settings de
+    JWT y rate limiting (cambio previsto en su alcance y en `.env.example`).
     """
     status = subprocess.run(
         [
@@ -666,7 +668,6 @@ def test_ca24_shared_infrastructure_files_are_not_modified() -> None:
             "docker-compose.yml",
             "alembic.ini",
             "alembic/env.py",
-            "app/core/config.py",
         ],
         cwd=ROOT,
         capture_output=True,
