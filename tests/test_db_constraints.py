@@ -809,15 +809,38 @@ async def test_seed_roles_is_idempotent_in_transaction(db_conn: AsyncConnection)
 
 
 async def test_unseed_sql_keeps_roles_in_use(db_conn: AsyncConnection) -> None:
-    """R-6: el downgrade del seed no borra un rol referenciado por usuarios."""
+    """R-6: el downgrade del seed no borra un rol referenciado por usuarios.
+
+    La BD de desarrollo puede contener cuentas permanentes que usan ADMIN y/o
+    MEDICO; el test comprueba la invariante (todo rol en uso sobrevive) en lugar
+    de asumir que la base esta vacia.
+    """
     role_id = await get_role_id(db_conn)
-    await create_user(db_conn, role_id=role_id)
+    created_user = await create_user(db_conn, role_id=role_id)
+    roles_in_use = {
+        row[0]
+        for row in await fetch_all(
+            db_conn,
+            """
+            SELECT DISTINCT r.name FROM roles r
+            JOIN users u ON u.role_id = r.id
+            """,
+        )
+    }
 
     await db_conn.execute(text(SEED_MODULE.UNSEED_ROLES_SQL))
 
-    remaining = await fetch_all(db_conn, "SELECT name FROM roles ORDER BY name")
-
-    assert [row[0] for row in remaining] == ["ADMIN"]
+    remaining = {row[0] for row in await fetch_all(db_conn, "SELECT name FROM roles ORDER BY name")}
+    assert roles_in_use <= remaining
+    assert "ADMIN" in remaining
+    assert (
+        await fetch_scalar(
+            db_conn,
+            "SELECT count(*) FROM users WHERE id = :id",
+            {"id": created_user},
+        )
+        == 1
+    )
 
 
 async def test_audit_log_ip_is_returned_as_str(db_conn: AsyncConnection) -> None:

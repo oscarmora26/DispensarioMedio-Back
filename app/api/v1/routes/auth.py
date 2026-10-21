@@ -27,10 +27,11 @@ LoginRateLimiterDep = Annotated[LoginRateLimiter, Depends(get_login_rate_limiter
 @router.post(
     "/login",
     response_model=LoginResponse,
-    summary="Iniciar sesion",
+    summary="Iniciar sesion con usuario o correo",
     description=(
-        "Autentica por nombre de usuario y contrasena y devuelve un JWT HS256. "
-        "Aplica rate limiting por IP y usuario; el intento bloqueado responde 429."
+        "Autentica por nombre de usuario o correo electronico y contrasena. "
+        "Devuelve un JWT HS256; el body debe incluir exactamente uno de `email` o `username`. "
+        "Aplica rate limiting por IP e identificador; el intento bloqueado responde 429."
     ),
     responses={
         status.HTTP_401_UNAUTHORIZED: {"description": "Credenciales invalidas"},
@@ -50,6 +51,7 @@ async def login(
     result = await auth_service.login(
         session,
         username=payload.username,
+        email=payload.email,
         password=payload.password,
         client_ip=client_ip,
         limiter=limiter,

@@ -1,21 +1,79 @@
 """Schemas del contrato de autenticacion."""
 
+from __future__ import annotations
+
+import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
+
+_EMAIL_PATTERN = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+_IDENTIFIER_DESCRIPTION = "Envía exactamente uno: `email` o `username`"
 
 
 class LoginRequest(BaseModel):
-    """Credenciales de acceso."""
+    """Credenciales de acceso por nombre de usuario o correo electronico."""
 
-    username: str = Field(min_length=1, max_length=50, description="Nombre de usuario")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"email": "aperez@dispensario.local", "password": "MiClaveSegura123"},
+                {"username": "aperez", "password": "MiClaveSegura123"},
+            ]
+        }
+    )
+
+    email: str | None = Field(
+        default=None,
+        max_length=255,
+        description=f"Correo electronico. {_IDENTIFIER_DESCRIPTION}",
+    )
+    username: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+        description=f"Nombre de usuario. {_IDENTIFIER_DESCRIPTION}",
+    )
     password: str = Field(min_length=1, max_length=128, description="Contrasena")
 
-    @field_validator("username", mode="before")
+    @field_validator("email", "username", mode="before")
     @classmethod
-    def _strip_username(cls, value: object) -> object:
+    def _strip_identifier(cls, value: object) -> object:
         return value.strip() if isinstance(value, str) else value
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not value:
+            raise PydanticCustomError(
+                "email_empty",
+                "El correo electrónico no puede estar vacío",
+            )
+        if not _EMAIL_PATTERN.fullmatch(value):
+            raise PydanticCustomError(
+                "email_format",
+                "El correo electrónico no tiene un formato válido",
+            )
+        return value
+
+    @model_validator(mode="after")
+    def _exactly_one_identifier(self) -> LoginRequest:
+        if (self.email is None) == (self.username is None):
+            raise PydanticCustomError(
+                "identifier_required",
+                "Indique 'username' o 'email' (exactamente uno)",
+            )
+        return self
 
 
 class LoginUser(BaseModel):

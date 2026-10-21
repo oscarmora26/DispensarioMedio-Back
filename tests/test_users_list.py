@@ -39,7 +39,8 @@ async def test_ca04_defaults_and_pagination_formula(
     assert set(body) == {"items", "total", "page", "size", "pages"}
     assert body["page"] == 1
     assert body["size"] == 20
-    assert body["total"] == total_db == 4
+    # `total_db` incluye las cuentas permanentes de la BD de desarrollo.
+    assert body["total"] == total_db
     assert len(body["items"]) == min(20, total_db)
     assert body["pages"] == (total_db + 19) // 20
     for item in body["items"]:

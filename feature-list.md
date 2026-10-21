@@ -19,7 +19,7 @@
 
 ## Feature activa
 
-Ninguna. El backlog queda sin features aprobadas pendientes: el humano debe aprobar la siguiente (catálogos, médicos, pacientes o visitas).
+Ninguna. El backlog queda sin features aprobadas; el humano decide la siguiente.
 
 ## Backlog
 
@@ -29,6 +29,7 @@ Ninguna. El backlog queda sin features aprobadas pendientes: el humano debe apro
 | FEAT-002 | Autenticación JWT: login, sesión y cambio de contraseña | `done` | [FEAT-002](docs/features/FEAT-002.md) | FEAT-001, FEAT-003 | 2026-10-21 |
 | FEAT-003 | Esquema de base de datos: modelos SQLAlchemy 2.0 y migraciones Alembic | `done` | [FEAT-003](docs/features/FEAT-003.md) | FEAT-001 | 2026-10-21 |
 | FEAT-004 | Gestión de usuarios: CRUD, roles y restablecimiento de contraseña | `done` | [FEAT-004](docs/features/FEAT-004.md) | FEAT-002, FEAT-003 | 2026-10-21 |
+| FEAT-005 | Login con email como identificador alternativo | `done` | [FEAT-005](docs/features/FEAT-005.md) | FEAT-002, FEAT-003 | 2026-10-21 |
 
 > FEAT-001 se ejecutó por instrucción directa del humano como línea base del proyecto, fuera del ciclo spec → implement → review.
 
@@ -69,3 +70,7 @@ proposed/approved ──(humano)──> rejected
 - 2026-10-21 — FEAT-004 `approved` → `in_progress`. Spec en `docs/features/FEAT-004.md` (41 CA, D-1…D-13, PUT de reemplazo completo, DELETE 204 idempotente, protección del último ADMIN y bloqueo `FOR UPDATE`).
 - 2026-10-21 — FEAT-004 `in_progress` → `in_review`. Implementados los 6 endpoints, repositorios, servicio y schemas; `ruff` limpio, `alembic check` limpio y 207 tests existentes en verde (aún sin tests de FEAT-004). Se corrigió el formato del bloque Python de la spec. El implementer usa `clock_timestamp()` para `updated_at` (desviación documentada de `onupdate`).
 - 2026-10-21 — FEAT-004 `in_review` → `done`: reviewer emite `APPROVED`; 50 tests nuevos y **257 tests en verde**, `ruff check`/`format --check` limpios y `alembic check` sin diferencias. Se documentan D-14 (`clock_timestamp()`) y la corrección de la regla 31 (204 sin `Content-Length`). Informe en `docs/reviews/FEAT-004.md`. Commit local `feat(FEAT-004)`.
+- 2026-10-21 — FEAT-005 registrada y **aprobada explícitamente por el humano**: el login acepta `email` opcional o `username`, exactamente uno, manteniendo `/api/v1` y la retrocompatibilidad. Decisión: opción "email opcional + username".
+- 2026-10-21 — FEAT-005 `approved` → `in_progress`. Spec en `docs/features/FEAT-005.md` (18 CA, D-1…D-6; `LoginRequest` con email/username opcionales y modelo "exactamente uno").
+- 2026-10-21 — FEAT-005 `in_progress` → `in_review`. Implementado login por `email` o `username` (exactamente uno), retrocompatible; `ruff`/format limpios, `alembic check` limpio y `256 passed, 1 failed` (solo el test de FEAT-002 que espera `username` obligatorio en `{}`; lo actualiza el reviewer). Smoke real: email y username devuelven `200`. Se restauraron las cuentas `admin`/`medico` que el smoke del implementer había borrado.
+- 2026-10-21 — FEAT-005 `in_review` → `done`: reviewer emite `APPROVED`; 29 tests nuevos y **286 tests en verde**, `ruff check`/`format --check` limpios y `alembic check` sin diferencias. Se corrigió el fixture destructivo de migraciones que borraba las cuentas permanentes. Informe en `docs/reviews/FEAT-005.md`. Commit local `feat(FEAT-005)`; contraseñas originales de `admin`/`medico` restauradas y verificadas.

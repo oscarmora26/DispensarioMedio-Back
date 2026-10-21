@@ -32,6 +32,14 @@ async def get_user_by_username(session: AsyncSession, username: str) -> User | N
     return result.scalar_one_or_none()
 
 
+async def get_user_by_email(session: AsyncSession, email: str) -> User | None:
+    """Busca un usuario por `email` (CITEXT: case-insensitive)."""
+    result = await session.execute(
+        select(User).options(selectinload(User.role)).where(User.email == email)
+    )
+    return result.scalar_one_or_none()
+
+
 async def get_user_by_id(session: AsyncSession, user_id: int) -> User | None:
     """Busca un usuario por identificador con su rol cargado."""
     result = await session.execute(

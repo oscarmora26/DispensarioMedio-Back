@@ -39,22 +39,29 @@ class LoginResult:
 async def login(
     session: AsyncSession,
     *,
-    username: str,
+    username: str | None = None,
+    email: str | None = None,
     password: str,
     client_ip: str,
     limiter: LoginRateLimiter | None = None,
 ) -> LoginResult:
-    """Autentica por `username` y contrasena, aplicando el rate limit del login."""
+    """Autentica por `username` o `email`, aplicando el rate limit del login."""
+    if (username is None) == (email is None):
+        raise ValueError("login requiere exactamente uno de 'username' o 'email'")
+
     rate_limiter = limiter if limiter is not None else get_login_rate_limiter()
-    normalized_username = username.strip()
-    key = build_key(client_ip, normalized_username)
+    identifier = (email or username or "").strip()
+    key = build_key(client_ip, identifier)
 
     retry_after = rate_limiter.retry_after(key)
     if retry_after is not None:
         logger.info("auth.rate_limited")
         raise RateLimitError(RATE_LIMITED_MESSAGE, retry_after=retry_after)
 
-    user = await user_repository.get_user_by_username(session, normalized_username)
+    if email is not None:
+        user = await user_repository.get_user_by_email(session, identifier)
+    else:
+        user = await user_repository.get_user_by_username(session, identifier)
     if user is None:
         # Verificacion ficticia para igualar el coste de Argon2 (anti-enumeracion).
         verify_password(password, _DUMMY_HASH)

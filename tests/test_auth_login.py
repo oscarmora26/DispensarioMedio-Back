@@ -169,7 +169,18 @@ async def test_ca15_missing_fields_and_length_limits(
 
     empty = await auth_client.post(LOGIN_PATH, json={})
     assert empty.status_code == 422
-    assert {item["field"] for item in empty.json()["errors"]} == {"password", "username"}
+    # FEAT-005 D-2: `username` ya es opcional; sin identificador solo falla `password`
+    # porque el validador de modelo no se ejecuta cuando falla un campo.
+    assert {item["field"] for item in empty.json()["errors"]} == {"password"}
+
+    missing_identifier = await auth_client.post(LOGIN_PATH, json={"password": DEFAULT_PASSWORD})
+    assert missing_identifier.status_code == 422
+    body = missing_identifier.json()
+    assert body["code"] == "validation_error"
+    assert body["detail"] == "Datos inválidos"
+    assert body["errors"] == [
+        {"field": "body", "message": "Indique 'username' o 'email' (exactamente uno)"}
+    ]
 
     long_username = await post_login(auth_client, "u" * 51, DEFAULT_PASSWORD)
     assert long_username.status_code == 422

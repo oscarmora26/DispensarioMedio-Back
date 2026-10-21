@@ -7,6 +7,7 @@ transaccion que se revierte.
 
 from __future__ import annotations
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from tests.db_support import fetch_all, fetch_scalar
@@ -19,7 +20,11 @@ from tests.test_models_metadata import (
     EXPECTED_TRGM_INDEXES,
     EXPECTED_UQS,
     EXPECTED_VISIT_INDEXES,
+    VERSIONS_DIR,
+    load_migration,
 )
+
+SEED_MODULE = load_migration(VERSIONS_DIR / "42de9c3ddd3a_seed_roles.py")
 
 EXPECTED_UNIQUE_INDEXES = EXPECTED_UQS | {"uq_patients_carnet"}
 
@@ -348,9 +353,9 @@ async def test_ca15_primary_keys_are_identity_by_default(db_conn: AsyncConnectio
 async def test_ca16_seed_roles_without_users_or_plaintext_passwords(
     db_conn: AsyncConnection,
 ) -> None:
-    """CA-16: exactamente ADMIN y MEDICO, 0 usuarios, 0 columnas de contrasena en claro."""
+    """CA-16: exactamente ADMIN y MEDICO, el seed no crea usuarios y no hay contrasenas en claro."""
     roles = await fetch_all(db_conn, "SELECT name FROM roles ORDER BY name")
-    users = await fetch_scalar(db_conn, "SELECT count(*) FROM users")
+    users_before = await fetch_scalar(db_conn, "SELECT count(*) FROM users")
     password_columns = await fetch_all(
         db_conn,
         """
@@ -362,8 +367,12 @@ async def test_ca16_seed_roles_without_users_or_plaintext_passwords(
         """,
     )
 
+    # Reejecutar el seed en la transaccion no debe anadir usuarios (FEAT-003 CA-16).
+    await db_conn.execute(text(SEED_MODULE.SEED_ROLES_SQL))
+    users_after = await fetch_scalar(db_conn, "SELECT count(*) FROM users")
+
     assert [row[0] for row in roles] == ["ADMIN", "MEDICO"]
-    assert users == 0
+    assert users_after == users_before
     assert password_columns == []
 
 

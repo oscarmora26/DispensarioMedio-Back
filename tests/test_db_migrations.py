@@ -8,14 +8,103 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
 
+from app.core.config import get_settings
 from tests.db_support import fetch_scalar_in_new_connection
 
 ROOT = Path(__file__).resolve().parents[1]
 TIMEOUT_SECONDS = 180
+USERS_BACKUP_SQL = """
+    SELECT u.id, u.username, u.email, u.password_hash, r.name AS role,
+           u.doctor_id, u.is_active, u.last_login_at
+    FROM users u
+    JOIN roles r ON r.id = u.role_id
+    ORDER BY u.id
+"""
+DOCTORS_BACKUP_SQL = """
+    SELECT id, name, cedula, lab_shift, specialty, is_active, created_at, updated_at
+    FROM doctors
+    ORDER BY id
+"""
+
+
+async def _fetch_rows(sql: str) -> list[dict[str, Any]]:
+    """Lee filas en una conexion nueva fuera de la transaccion de los tests."""
+    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    try:
+        async with engine.connect() as conn:
+            result = await conn.execute(text(sql))
+            return [dict(row) for row in result.mappings().all()]
+    finally:
+        await engine.dispose()
+
+
+async def _execute(sql: str, params: dict[str, Any] | None = None) -> None:
+    """Ejecuta una sentencia en una conexion nueva (autocommit)."""
+    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text(sql), params or {})
+    finally:
+        await engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+async def preserve_permanent_dev_accounts() -> AsyncIterator[None]:
+    """Protege los usuarios y medicos ya existentes ante `downgrade base`.
+
+    La BD de desarrollo contiene cuentas permanentes creadas por el humano
+    (`admin` y `medico`). Los tests de migraciones legitiman `downgrade base`,
+    que borra todas las tablas; este fixture guarda esas filas y las restaura
+    despues de cada test. Las filas que el propio test crea no se tocan.
+    """
+    doctors = await _fetch_rows(DOCTORS_BACKUP_SQL)
+    users = await _fetch_rows(USERS_BACKUP_SQL)
+    yield
+    for doctor in doctors:
+        await _execute(
+            """
+            INSERT INTO doctors (
+                id, name, cedula, lab_shift, specialty, is_active, created_at, updated_at
+            )
+            VALUES (
+                :id, :name, :cedula, :lab_shift, :specialty, :is_active, :created_at, :updated_at
+            )
+            ON CONFLICT (id) DO NOTHING
+            """,
+            doctor,
+        )
+    for user in users:
+        await _execute(
+            """
+            INSERT INTO users (
+                id, username, email, password_hash, role_id, doctor_id, is_active, last_login_at
+            )
+            VALUES (
+                :id, :username, :email, :password_hash,
+                (SELECT id FROM roles WHERE name = :role),
+                :doctor_id, :is_active, :last_login_at
+            )
+            ON CONFLICT (username) DO NOTHING
+            """,
+            user,
+        )
+    if users:
+        await _execute(
+            "SELECT setval(pg_get_serial_sequence('users', 'id'), (SELECT max(id) FROM users))"
+        )
+    if doctors:
+        await _execute(
+            "SELECT setval(pg_get_serial_sequence('doctors', 'id'), (SELECT max(id) FROM doctors))"
+        )
 
 
 def run_alembic(*args: str) -> subprocess.CompletedProcess[str]:
@@ -73,10 +162,32 @@ async def test_ca21_upgrade_head_is_idempotent() -> None:
 
 
 async def test_ca17_downgrade_one_and_upgrade_restores_seed() -> None:
-    """CA-17: bajar el seed y volver a subir deja exactamente dos roles."""
+    """CA-17: bajar el seed respeta los roles en uso y volver a subir deja los dos roles.
+
+    La BD de desarrollo tiene cuentas permanentes (`admin`/`medico`) que referencian
+    ambos roles, por lo que `UNSEED_ROLES_SQL` no los borra (R-6). El test comprueba
+    que los roles referenciados sobreviven y que `upgrade head` restaura el seed.
+    """
+    roles_before = {
+        row["name"] for row in await _fetch_rows("SELECT name FROM roles ORDER BY name")
+    }
+    roles_in_use = {
+        row["name"]
+        for row in await _fetch_rows(
+            """
+            SELECT DISTINCT r.name FROM roles r
+            JOIN users u ON u.role_id = r.id
+            """
+        )
+    }
     try:
         alembic_ok("downgrade", "-1")
-        assert await scalar("SELECT count(*) FROM roles") == 0
+
+        roles_after = {
+            row["name"] for row in await _fetch_rows("SELECT name FROM roles ORDER BY name")
+        }
+        assert roles_in_use <= roles_after
+        assert roles_after <= roles_before
 
         alembic_ok("upgrade", "head")
         roles = await scalar("SELECT count(*) FROM roles")
