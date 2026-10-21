@@ -19,7 +19,7 @@
 
 ## Feature activa
 
-Ninguna. FEAT-004 (gestión de usuarios) está `proposed` y espera aprobación humana.
+Ninguna. El backlog queda sin features aprobadas pendientes: el humano debe aprobar la siguiente (catálogos, médicos, pacientes o visitas).
 
 ## Backlog
 
@@ -28,7 +28,7 @@ Ninguna. FEAT-004 (gestión de usuarios) está `proposed` y espera aprobación h
 | FEAT-001 | Fundaciones de la API: scaffold, config, logging, PostgreSQL y Docker | `done` | [FEAT-001](docs/features/FEAT-001.md) | — | 2026-10-20 |
 | FEAT-002 | Autenticación JWT: login, sesión y cambio de contraseña | `done` | [FEAT-002](docs/features/FEAT-002.md) | FEAT-001, FEAT-003 | 2026-10-21 |
 | FEAT-003 | Esquema de base de datos: modelos SQLAlchemy 2.0 y migraciones Alembic | `done` | [FEAT-003](docs/features/FEAT-003.md) | FEAT-001 | 2026-10-21 |
-| FEAT-004 | Gestión de usuarios: CRUD, roles y restablecimiento de contraseña | `proposed` | pendiente | FEAT-002 | 2026-10-21 |
+| FEAT-004 | Gestión de usuarios: CRUD, roles y restablecimiento de contraseña | `done` | [FEAT-004](docs/features/FEAT-004.md) | FEAT-002, FEAT-003 | 2026-10-21 |
 
 > FEAT-001 se ejecutó por instrucción directa del humano como línea base del proyecto, fuera del ciclo spec → implement → review.
 
@@ -65,3 +65,7 @@ proposed/approved ──(humano)──> rejected
 - 2026-10-21 — FEAT-002 `in_review` → `changes_requested` (ciclo 1/3). Reviewer escribe 67 tests nuevos (`198 passed, 1 xfailed`) y emite `CHANGES_REQUESTED`: **MAJOR** en `user_repository.find_user_by_username_or_email` (colisión username/email → `MultipleResultsFound`, el CLI devuelve 4 en vez de 1). Informe en `docs/reviews/FEAT-002.md`.
 - 2026-10-21 — FEAT-002 `changes_requested` → `in_review` (ciclo 2/3). Implementer corrige el MAJOR (`.limit(1)`), iguala el coste de Argon2 para usuarios inexistentes, elimina el parámetro muerto de `decode_access_token`, valida positividad de settings y crea el token antes del `commit()`. Suite: `198 passed, 1 failed` (solo el XPASS estricto esperado).
 - 2026-10-21 — FEAT-002 `in_review` → `done`: reviewer emite `APPROVED` (ciclo 2/3), cierra los 5 hallazgos y deja **207 tests en verde**, `ruff check`/`format --check` limpios y `alembic check` sin diferencias. Informe en `docs/reviews/FEAT-002.md`. Commit local `feat(FEAT-002)`.
+- 2026-10-21 — FEAT-004 **aprobada explícitamente por el humano** ("Sí" a la propuesta de iniciar gestión de usuarios). Alcance: `/users` CRUD, asignación de rol/médico y `reset-password`; no incluye catálogo de médicos.
+- 2026-10-21 — FEAT-004 `approved` → `in_progress`. Spec en `docs/features/FEAT-004.md` (41 CA, D-1…D-13, PUT de reemplazo completo, DELETE 204 idempotente, protección del último ADMIN y bloqueo `FOR UPDATE`).
+- 2026-10-21 — FEAT-004 `in_progress` → `in_review`. Implementados los 6 endpoints, repositorios, servicio y schemas; `ruff` limpio, `alembic check` limpio y 207 tests existentes en verde (aún sin tests de FEAT-004). Se corrigió el formato del bloque Python de la spec. El implementer usa `clock_timestamp()` para `updated_at` (desviación documentada de `onupdate`).
+- 2026-10-21 — FEAT-004 `in_review` → `done`: reviewer emite `APPROVED`; 50 tests nuevos y **257 tests en verde**, `ruff check`/`format --check` limpios y `alembic check` sin diferencias. Se documentan D-14 (`clock_timestamp()`) y la corrección de la regla 31 (204 sin `Content-Length`). Informe en `docs/reviews/FEAT-004.md`. Commit local `feat(FEAT-004)`.

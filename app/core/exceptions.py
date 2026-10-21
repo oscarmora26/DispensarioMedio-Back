@@ -85,10 +85,17 @@ class RateLimitError(AppError):
         super().__init__(message, code=code, errors=errors, headers=merged_headers)
 
 
+_PARAM_LOCATIONS = frozenset({"body", "query", "path", "header"})
+
+
 def _validation_field(loc: tuple[Any, ...]) -> str:
-    """Convierte el `loc` de Pydantic en un nombre de campo legible."""
+    """Convierte el `loc` de Pydantic en un nombre de campo legible.
+
+    Se descarta la ubicacion del parametro (`body`, `query`, `path`, `header`)
+    para que el cliente reciba solo el nombre del campo (FEAT-004 D-13).
+    """
     parts = list(loc)
-    if parts and parts[0] == "body":
+    if parts and parts[0] in _PARAM_LOCATIONS:
         parts = parts[1:]
     return ".".join(str(part) for part in parts) or "body"
 
