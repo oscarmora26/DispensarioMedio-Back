@@ -5,9 +5,14 @@ from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
-from app.core.config import get_settings
+from app.core.config import (
+    CORS_EXPOSE_HEADERS,
+    CORS_PREFLIGHT_MAX_AGE_SECONDS,
+    get_settings,
+)
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.db.session import engine
@@ -55,6 +60,19 @@ def create_app() -> FastAPI:
     )
 
     # El ultimo middleware agregado es el mas externo: RequestID debe envolver al de acceso.
+    # CORS se agrega primero para quedar dentro de ambos: asi el preflight tambien
+    # recibe X-Request-ID y se registra en el access log.
+    # Si no hay origenes configurados, CORS queda deshabilitado (fail-closed).
+    if settings.cors_allowed_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_allowed_origins,
+            allow_methods=settings.cors_allowed_methods,
+            allow_headers=settings.cors_allowed_headers,
+            allow_credentials=False,
+            expose_headers=CORS_EXPOSE_HEADERS,
+            max_age=CORS_PREFLIGHT_MAX_AGE_SECONDS,
+        )
     app.add_middleware(AccessLogMiddleware)
     app.add_middleware(RequestIDMiddleware)
 
