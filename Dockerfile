@@ -10,14 +10,14 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 # 1) Solo dependencias: aprovecha la cache de capas.
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,id=uv,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-install-project --no-group dev
 
 # 2) Codigo y sincronizacion final.
 COPY . /app
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,id=uv,target=/root/.cache/uv \
     uv sync --frozen --no-group dev
 
 # ---------- Runtime ----------
