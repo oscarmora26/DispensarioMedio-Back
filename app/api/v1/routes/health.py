@@ -40,7 +40,7 @@ async def readiness(response: Response) -> ReadinessResponse:
     try:
         async with SessionLocal() as session:
             await session.execute(text("SELECT 1"))
-    except SQLAlchemyError:
+    except (SQLAlchemyError, OSError):
         logger.warning("readiness.database_unavailable")
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return ReadinessResponse(status="unavailable", database="down")
