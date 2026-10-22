@@ -19,7 +19,7 @@
 
 ## Feature activa
 
-Ninguna. El backlog queda sin features aprobadas; el humano decide la siguiente.
+Ninguna. FEAT-009 cerrada como `done`; el humano decide la siguiente.
 
 ## Backlog
 
@@ -33,6 +33,8 @@ Ninguna. El backlog queda sin features aprobadas; el humano decide la siguiente.
 | FEAT-006 | CORS configurable para el frontend (localhost:4200) | `done` | [FEAT-006](docs/features/FEAT-006.md) | FEAT-001 | 2026-10-21 |
 | FEAT-007 | Gestión de tipos de fármacos: CRUD, permisos y desactivación lógica | `done` | [FEAT-007](docs/features/FEAT-007.md) | FEAT-003 | 2026-10-21 |
 | FEAT-008 | Gestión de marcas: CRUD, permisos y desactivación lógica | `done` | [FEAT-008](docs/features/FEAT-008.md) | FEAT-003 | 2026-10-21 |
+| FEAT-009 | Gestión de ubicaciones: CRUD, permisos y desactivación lógica | `done` | [FEAT-009](docs/features/FEAT-009.md) | FEAT-003 | 2026-10-22 |
+| FEAT-010 | Gestión de medicamentos: CRUD, permisos y desactivación lógica | `proposed` | [FEAT-010](docs/features/FEAT-010.md) | FEAT-003, FEAT-007, FEAT-008, FEAT-009 | 2026-10-22 |
 
 > FEAT-001 se ejecutó por instrucción directa del humano como línea base del proyecto, fuera del ciclo spec → implement → review.
 
@@ -92,3 +94,9 @@ proposed/approved ──(humano)──> rejected
 - 2026-10-21 — FEAT-008 `approved` → `in_progress`. Spec en `docs/features/FEAT-008.md` (35 reglas, D-1…D-11, CA-1…CA-29): CRUD `/brands` con CA-CRUD, descripción única CITEXT 1..100, ADMIN escritura / MEDICO lectura, DELETE 204 idempotente y `clock_timestamp()` para `updated_at`. Preguntas no bloqueantes: longitud máxima 100 y conservación de capitalización.
 - 2026-10-21 — FEAT-008 `in_progress` → `in_review`. Implementación completa (schemas, repository, service, routes + registro en router); `ruff` limpio, `alembic check` limpio y 387 tests existentes en verde (aún sin tests de FEAT-008). Sin migraciones.
 - 2026-10-21 — FEAT-008 `in_review` → `done`: reviewer emite `APPROVED`; 39 tests nuevos y **426 tests en verde**, `ruff check`/`format --check` limpios y `alembic check` sin diferencias. Hallazgos menores no bloqueantes en `docs/reviews/FEAT-008.md` (doble consulta en `find_by_description`, `_ensure_unique` carga entidad, `PUT` sin cambios refresca `updated_at`). Commit local `feat(FEAT-008)`. El cambio ajeno en `.opencode/opencode.json` queda fuera del commit.
+- 2026-10-22 — FEAT-009 registrada como `proposed` a pedido del humano: gestión de ubicaciones (US-17, RF-06, E2). Alcance previsto: CRUD `/locations` con `description/shelf/section/cell` (CITEXT), combinación única `(shelf, section, cell)`, permisos ADMIN escritura / MEDICO lectura y desactivación lógica. Pendiente de aprobación explícita del humano.
+- 2026-10-22 — FEAT-009 `proposed` → `approved`: aprobación explícita del humano ("Sí, aprobar e iniciar" vía pregunta de aprobación). Decisiones: longitudes 1..100 para los 4 campos (mismo patrón que FEAT-007/008).
+- 2026-10-22 — FEAT-009 `approved` → `in_progress`. Spec en `docs/features/FEAT-009.md` (unicidad compuesta `(shelf,section,cell)` CITEXT, 30 CA, PUT reemplazo completo, DELETE 204 idempotente).
+- 2026-10-22 — FEAT-009 `in_progress` → `in_review`. Implementación completa (schemas, repository, service, routes + registro en router); `ruff` limpio, `alembic check` limpio y 426 tests existentes en verde (aún sin tests de FEAT-009). Sin migraciones.
+- 2026-10-22 — FEAT-009 `in_review` → `done`: reviewer emite `APPROVED`; 40 tests nuevos y **466 tests en verde**, `ruff check`/`format --check` limpios y `alembic check` sin diferencias. Hallazgos menores no bloqueantes en `docs/reviews/FEAT-009.md` (doble consulta en `find_by_position`, `_ensure_unique` carga entidad, `PUT` sin cambios refresca `updated_at`). Commit local `feat(FEAT-009)`.
+- 2026-10-22 — FEAT-010 registrada como `proposed` a pedido del humano: gestión de medicamentos (US-20, US-21, US-22, RF-07, E3/E4). Alcance previsto: CRUD `/medications` con `description/drug_type_id/brand_id/location_id/dose` (CITEXT), combinación única `(description, brand_id, dose)`, permisos ADMIN escritura / MEDICO lectura y desactivación lógica. Depende de FEAT-003, FEAT-007, FEAT-008, FEAT-009. Pendiente de aprobación explícita del humano.
