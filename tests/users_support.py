@@ -9,7 +9,13 @@ from httpx import Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from tests.auth_support import DEFAULT_PASSWORD, auth_headers, create_auth_user, token_for
+from tests.auth_support import (
+    DEFAULT_PASSWORD,
+    auth_headers,
+    cached_password_hash,
+    create_auth_user,
+    token_for,
+)
 from tests.db_support import create_doctor, get_role_id, unique_suffix
 
 USERS_PATH = "/api/v1/users"
@@ -74,6 +80,7 @@ async def admin_actor(conn: AsyncConnection) -> tuple[int, dict[str, str]]:
         username=f"actor-{suffix}",
         email=f"actor.{suffix}@example.test",
         role="ADMIN",
+        password_hash=cached_password_hash(),
     )
     return user_id, auth_headers(token_for(user_id))
 
@@ -96,6 +103,7 @@ async def medico_user(
         doctor_id=doctor_id,
         is_active=is_active,
         password=password,
+        password_hash=cached_password_hash(password) if password == PASSWORD else None,
     )
     return user_id, username, token_for(user_id, role="MEDICO", doctor_id=doctor_id)
 

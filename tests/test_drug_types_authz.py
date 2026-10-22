@@ -5,7 +5,7 @@ from __future__ import annotations
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from tests.auth_support import auth_headers, create_auth_user, token_for
+from tests.auth_support import auth_headers, cached_password_hash, create_auth_user, token_for
 from tests.db_support import unique_suffix
 from tests.drug_types_support import (
     DRUG_TYPES_PATH,
@@ -109,7 +109,11 @@ async def test_ca02_authentication_matrix(
 
     for role, path in (("ADMIN", DRUG_TYPES_PATH), ("MEDICO", DRUG_TYPES_PATH)):
         inactive_id = await create_auth_user(
-            db_conn, username=f"inactivo_{unique_suffix()}", role=role, is_active=False
+            db_conn,
+            username=f"inactivo_{unique_suffix()}",
+            role=role,
+            is_active=False,
+            password_hash=cached_password_hash(),
         )
         inactive_headers = auth_headers(token_for(inactive_id, role=role))
         list_response = await auth_client.get(path, headers=inactive_headers)

@@ -8,7 +8,7 @@ from httpx import Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from tests.auth_support import auth_headers, create_auth_user, token_for
+from tests.auth_support import auth_headers, cached_password_hash, create_auth_user, token_for
 from tests.db_support import create_brand, create_location, unique_suffix
 from tests.users_support import assert_error_envelope
 
@@ -34,6 +34,7 @@ async def admin_actor(conn: AsyncConnection) -> tuple[int, dict[str, str]]:
         username=f"dtactor-{suffix}",
         email=f"dtactor.{suffix}@example.test",
         role="ADMIN",
+        password_hash=cached_password_hash(),
     )
     return user_id, auth_headers(token_for(user_id))
 
@@ -46,6 +47,7 @@ async def medico_actor(conn: AsyncConnection) -> tuple[int, dict[str, str]]:
         username=f"dtmedico_{suffix}",
         email=f"dtmedico_{suffix}@example.test",
         role="MEDICO",
+        password_hash=cached_password_hash(),
     )
     return user_id, auth_headers(token_for(user_id, role="MEDICO"))
 

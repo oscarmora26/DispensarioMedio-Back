@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from app.repositories import user_repository
-from tests.auth_support import create_auth_user
+from tests.auth_support import cached_password_hash, create_auth_user
 from tests.db_support import get_role_id, unique_suffix
 from tests.users_support import (
     PASSWORD,
@@ -50,7 +50,7 @@ async def test_ca34_put_retiring_admin_locks_user_then_role_then_counts(
     monkeypatch.setattr(user_repository, "count_other_active_admins", spy_count)
 
     _, headers = await admin_actor(db_conn)
-    target_id = await create_auth_user(db_conn, role="ADMIN")
+    target_id = await create_auth_user(db_conn, role="ADMIN", password_hash=cached_password_hash())
     target = await fetch_user_row(db_conn, target_id)
     assert target is not None
     medico_role_id = await get_role_id(db_conn, "MEDICO")
@@ -76,7 +76,9 @@ async def test_ca34_put_retiring_admin_locks_user_then_role_then_counts(
 
     # DELETE de un ADMIN activo sigue el mismo orden.
     calls.clear()
-    second_target = await create_auth_user(db_conn, role="ADMIN")
+    second_target = await create_auth_user(
+        db_conn, role="ADMIN", password_hash=cached_password_hash()
+    )
     deleted = await auth_client.delete(user_path(second_target), headers=headers)
     assert deleted.status_code == 204, deleted.text
     assert calls == [
@@ -108,7 +110,7 @@ async def test_ca34_put_without_retiring_admin_does_not_lock_the_role(
     monkeypatch.setattr(user_repository, "lock_admin_role", spy_lock)
 
     _, headers = await admin_actor(db_conn)
-    target_id = await create_auth_user(db_conn, role="MEDICO")
+    target_id = await create_auth_user(db_conn, role="MEDICO", password_hash=cached_password_hash())
     target = await fetch_user_row(db_conn, target_id)
     assert target is not None
     medico_role_id = await get_role_id(db_conn, "MEDICO")

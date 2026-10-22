@@ -5,7 +5,12 @@ from __future__ import annotations
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from tests.auth_support import auth_headers, create_auth_user, token_for
+from tests.auth_support import (
+    auth_headers,
+    cached_password_hash,
+    create_auth_user,
+    token_for,
+)
 from tests.db_support import create_doctor, unique_suffix
 from tests.users_support import (
     NEW_PASSWORD,
@@ -31,7 +36,12 @@ async def test_ca01_medico_is_forbidden_on_all_six_endpoints_without_writes(
     """CA-1: MEDICO recibe 403 `forbidden` en los seis endpoints y no escribe."""
     doctor_id = await create_doctor(db_conn)
     _, _, actor_token = await medico_user(db_conn, doctor_id=doctor_id)
-    target_id = await create_auth_user(db_conn, username=f"target_{unique_suffix()}", role="MEDICO")
+    target_id = await create_auth_user(
+        db_conn,
+        username=f"target_{unique_suffix()}",
+        role="MEDICO",
+        password_hash=cached_password_hash(),
+    )
     before = await fetch_user_row(db_conn, target_id)
     assert before is not None
 
@@ -111,7 +121,11 @@ async def test_ca02_authentication_failures_share_the_contract(
     assert_error_envelope(expired, 401, "invalid_token")
 
     inactive_id = await create_auth_user(
-        db_conn, username=f"inactivo_{unique_suffix()}", role="ADMIN", is_active=False
+        db_conn,
+        username=f"inactivo_{unique_suffix()}",
+        role="ADMIN",
+        is_active=False,
+        password_hash=cached_password_hash(),
     )
     inactive_token = token_for(inactive_id)
     for response in (
@@ -156,7 +170,11 @@ async def test_ca36_envelope_and_codes_are_uniform_per_catalog(
     suffix = unique_suffix()
     duplicate_username = f"dup_{suffix}"
     await create_auth_user(
-        db_conn, username=duplicate_username, email=f"{suffix}@example.test", role="MEDICO"
+        db_conn,
+        username=duplicate_username,
+        email=f"{suffix}@example.test",
+        role="MEDICO",
+        password_hash=cached_password_hash(),
     )
 
     cases = [
@@ -290,7 +308,11 @@ async def test_ca36_envelope_and_codes_are_uniform_per_catalog(
     )
 
     inactive_id = await create_auth_user(
-        db_conn, username=f"in_{unique_suffix()}", role="ADMIN", is_active=False
+        db_conn,
+        username=f"in_{unique_suffix()}",
+        role="ADMIN",
+        is_active=False,
+        password_hash=cached_password_hash(),
     )
     assert_error_envelope(
         await auth_client.get(USERS_PATH, headers=auth_headers(token_for(inactive_id))),

@@ -18,6 +18,24 @@ LOGIN_PATH = "/api/v1/auth/login"
 ME_PATH = "/api/v1/auth/me"
 CHANGE_PASSWORD_PATH = "/api/v1/auth/change-password"
 
+_cached_hashes: dict[str, str] = {}
+
+
+def cached_password_hash(password: str = DEFAULT_PASSWORD) -> str:
+    """Devuelve un hash Argon2id reutilizable para `password`.
+
+    El hash se genera una sola vez por proceso y se reutiliza en los tests
+    que solo necesitan una fila de usuario valida (actores ADMIN/MEDICO que
+    se autentican por token) sin verificar el hashing en si. Los tests de
+    login/password siguen usando hashes frescos: llaman a
+    `create_auth_user` sin `password_hash`.
+    """
+    hashed = _cached_hashes.get(password)
+    if hashed is None:
+        hashed = hash_password(password)
+        _cached_hashes[password] = hashed
+    return hashed
+
 
 async def create_auth_user(
     conn: AsyncConnection,

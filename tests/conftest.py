@@ -5,13 +5,14 @@ from contextlib import AsyncExitStack
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
 from app.core.rate_limit import get_login_rate_limiter
 from app.db.session import get_session
 from app.main import app
+from tests.auth_support import cached_password_hash
 
 DEFAULT_CLIENT = ("127.0.0.1", 1234)
 
@@ -24,24 +25,45 @@ async def client() -> AsyncIterator[AsyncClient]:
         yield async_client
 
 
+@pytest.fixture(scope="session")
+async def db_engine() -> AsyncIterator[AsyncEngine]:
+    """Motor compartido por toda la sesion (paso 2 de la optimizacion).
+
+    Con `NullPool` no se retiene ninguna conexion entre tests: cada `db_conn`
+    abre la suya y la cierra al terminar, asi que compartir el motor es seguro
+    y evita crearlo y destruirlo 500+ veces.
+    """
+    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _warmed_password_hashes() -> str:
+    """Precalcula una vez el hash compartido (paso 1: ADMIN y MEDICO default).
+
+    Ambos roles usan `DEFAULT_PASSWORD`, asi que un solo hash cubre a todos
+    los actores que se autentican por token.
+    """
+    return cached_password_hash()
+
+
 @pytest.fixture
-async def db_conn() -> AsyncIterator[AsyncConnection]:
+async def db_conn(db_engine: AsyncEngine) -> AsyncIterator[AsyncConnection]:
     """Conexion con una transaccion que se revierte al terminar cada test.
 
     Los tests de integracion comparten la base de desarrollo (ya migrada con
     `alembic upgrade head`), pero nunca dejan datos: todo ocurre dentro de una
     transaccion que se deshace al finalizar.
     """
-    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
-    try:
-        async with engine.connect() as connection:
-            transaction = await connection.begin()
-            try:
-                yield connection
-            finally:
-                await transaction.rollback()
-    finally:
-        await engine.dispose()
+    async with db_engine.connect() as connection:
+        transaction = await connection.begin()
+        try:
+            yield connection
+        finally:
+            await transaction.rollback()
 
 
 @pytest.fixture

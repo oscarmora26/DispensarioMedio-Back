@@ -5,7 +5,7 @@ from __future__ import annotations
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from tests.auth_support import create_auth_user
+from tests.auth_support import cached_password_hash, create_auth_user
 from tests.db_support import fetch_scalar, unique_suffix
 from tests.users_support import (
     USERS_PATH,
@@ -31,7 +31,7 @@ async def test_ca04_defaults_and_pagination_formula(
     """CA-4: sin parametros `page=1`, `size=20` y `pages = ceil(total/20)`."""
     _, headers = await admin_actor(db_conn)
     for _ in range(3):
-        await create_auth_user(db_conn, role="MEDICO")
+        await create_auth_user(db_conn, role="MEDICO", password_hash=cached_password_hash())
 
     total_db = int(await fetch_scalar(db_conn, "SELECT count(*) FROM users"))
     body = await _list(auth_client, headers)
@@ -93,7 +93,13 @@ async def test_ca06_sort_catalog_direction_tiebreak_and_nulls(
     usernames = [f"{prefix}{letter}" for letter in "abcde"]
     emails = [f"{prefix}-{n}@example.test" for n in (5, 4, 3, 2, 1)]
     ids = [
-        await create_auth_user(db_conn, username=username, email=email, role="MEDICO")
+        await create_auth_user(
+            db_conn,
+            username=username,
+            email=email,
+            role="MEDICO",
+            password_hash=cached_password_hash(),
+        )
         for username, email in zip(usernames, emails, strict=True)
     ]
 
@@ -169,17 +175,55 @@ async def test_ca07_search_is_case_insensitive_partial_and_escapes_wildcards(
     mail_username = f"mail{tag}"
     mail_email = f"correo.{tag}@example.test"
 
-    await create_auth_user(db_conn, username=percent, email=f"p{tag}@example.test", role="MEDICO")
-    await create_auth_user(db_conn, username=plain, email=f"q{tag}@example.test", role="MEDICO")
     await create_auth_user(
-        db_conn, username=underscore, email=f"u{tag}@example.test", role="MEDICO"
+        db_conn,
+        username=percent,
+        email=f"p{tag}@example.test",
+        role="MEDICO",
+        password_hash=cached_password_hash(),
     )
     await create_auth_user(
-        db_conn, username=plain_underscore, email=f"v{tag}@example.test", role="MEDICO"
+        db_conn,
+        username=plain,
+        email=f"q{tag}@example.test",
+        role="MEDICO",
+        password_hash=cached_password_hash(),
     )
-    await create_auth_user(db_conn, username=slash, email=f"s{tag}@example.test", role="MEDICO")
-    await create_auth_user(db_conn, username=mixed, email=f"m{tag}@example.test", role="MEDICO")
-    await create_auth_user(db_conn, username=mail_username, email=mail_email, role="MEDICO")
+    await create_auth_user(
+        db_conn,
+        username=underscore,
+        email=f"u{tag}@example.test",
+        role="MEDICO",
+        password_hash=cached_password_hash(),
+    )
+    await create_auth_user(
+        db_conn,
+        username=plain_underscore,
+        email=f"v{tag}@example.test",
+        role="MEDICO",
+        password_hash=cached_password_hash(),
+    )
+    await create_auth_user(
+        db_conn,
+        username=slash,
+        email=f"s{tag}@example.test",
+        role="MEDICO",
+        password_hash=cached_password_hash(),
+    )
+    await create_auth_user(
+        db_conn,
+        username=mixed,
+        email=f"m{tag}@example.test",
+        role="MEDICO",
+        password_hash=cached_password_hash(),
+    )
+    await create_auth_user(
+        db_conn,
+        username=mail_username,
+        email=mail_email,
+        role="MEDICO",
+        password_hash=cached_password_hash(),
+    )
 
     no_filter = await _list(auth_client, headers, size=100)
 
@@ -216,7 +260,11 @@ async def test_ca08_filter_by_is_active_and_combination_with_search(
     _, headers = await admin_actor(db_conn)
     prefix = f"act{unique_suffix()}"
     active_id = await create_auth_user(
-        db_conn, username=f"{prefix}_on", email=f"{prefix}_on@example.test", role="MEDICO"
+        db_conn,
+        username=f"{prefix}_on",
+        email=f"{prefix}_on@example.test",
+        role="MEDICO",
+        password_hash=cached_password_hash(),
     )
     inactive_id = await create_auth_user(
         db_conn,
@@ -224,8 +272,14 @@ async def test_ca08_filter_by_is_active_and_combination_with_search(
         email=f"{prefix}_off@example.test",
         role="MEDICO",
         is_active=False,
+        password_hash=cached_password_hash(),
     )
-    other_id = await create_auth_user(db_conn, username=f"other_{unique_suffix()}", role="MEDICO")
+    other_id = await create_auth_user(
+        db_conn,
+        username=f"other_{unique_suffix()}",
+        role="MEDICO",
+        password_hash=cached_password_hash(),
+    )
 
     both = await _list(auth_client, headers, search=prefix, size=100)
     assert {item["id"] for item in both["items"]} == {active_id, inactive_id}
@@ -266,7 +320,11 @@ async def test_ca10_item_shape_is_exact_in_list(
     tag = unique_suffix()
     username = f"shape_{tag}"
     await create_auth_user(
-        db_conn, username=username, email=f"shape_{tag}@example.test", role="MEDICO"
+        db_conn,
+        username=username,
+        email=f"shape_{tag}@example.test",
+        role="MEDICO",
+        password_hash=cached_password_hash(),
     )
 
     item = (await _list(auth_client, headers, search=username))["items"][0]
@@ -284,7 +342,11 @@ async def test_ca19_detail_matches_list_and_supports_inactive_users(
     tag = unique_suffix()
     username = f"detail_{tag}"
     user_id = await create_auth_user(
-        db_conn, username=username, email=f"detail_{tag}@example.test", role="MEDICO"
+        db_conn,
+        username=username,
+        email=f"detail_{tag}@example.test",
+        role="MEDICO",
+        password_hash=cached_password_hash(),
     )
     inactive_id = await create_auth_user(
         db_conn,
@@ -292,6 +354,7 @@ async def test_ca19_detail_matches_list_and_supports_inactive_users(
         email=f"inactive_{tag}@example.test",
         role="MEDICO",
         is_active=False,
+        password_hash=cached_password_hash(),
     )
 
     list_item = (await _list(auth_client, headers, search=username))["items"][0]

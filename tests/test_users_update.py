@@ -5,7 +5,7 @@ from __future__ import annotations
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from tests.auth_support import LOGIN_PATH, auth_headers, create_auth_user
+from tests.auth_support import LOGIN_PATH, auth_headers, cached_password_hash, create_auth_user
 from tests.db_support import create_doctor, get_role_id, unique_suffix
 from tests.users_support import (
     PASSWORD,
@@ -184,7 +184,7 @@ async def test_ca24_last_admin_rule_on_self_demotion(
     assert still_admin.status_code == 200
     assert still_admin.json()["role"] == "ADMIN"
 
-    await create_auth_user(db_conn, role="ADMIN")
+    await create_auth_user(db_conn, role="ADMIN", password_hash=cached_password_hash())
 
     allowed = await auth_client.put(
         user_path(actor_id),
@@ -340,8 +340,8 @@ async def test_ca27_deactivate_another_admin_counts_other_admins(
 ) -> None:
     """CA-27: desactivar a otro ADMIN con un tercero activo ⇒ 200 y baja el conteo."""
     actor_id, headers = await admin_actor(db_conn)
-    target_id = await create_auth_user(db_conn, role="ADMIN")
-    await create_auth_user(db_conn, role="ADMIN")
+    target_id = await create_auth_user(db_conn, role="ADMIN", password_hash=cached_password_hash())
+    await create_auth_user(db_conn, role="ADMIN", password_hash=cached_password_hash())
     target = await fetch_user_row(db_conn, target_id)
     assert target is not None
     admin_role_id = await get_role_id(db_conn, "ADMIN")

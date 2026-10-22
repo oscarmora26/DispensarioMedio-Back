@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
 from app.main import app
-from tests.auth_support import auth_headers, create_auth_user, token_for
+from tests.auth_support import auth_headers, cached_password_hash, create_auth_user, token_for
 from tests.brands_support import (
     BRANDS_PATH,
     admin_actor,
@@ -78,7 +78,11 @@ async def test_ca24_every_error_uses_the_exact_envelope(
     brand_id = created.json()["id"]
     missing_id = await nonexistent_brand_id(db_conn)
     inactive_id = await create_auth_user(
-        db_conn, username=f"binactivo_{unique_suffix()}", role="ADMIN", is_active=False
+        db_conn,
+        username=f"binactivo_{unique_suffix()}",
+        role="ADMIN",
+        is_active=False,
+        password_hash=cached_password_hash(),
     )
     inactive_headers = auth_headers(token_for(inactive_id))
 

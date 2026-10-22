@@ -8,7 +8,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from tests.auth_support import create_auth_user
+from tests.auth_support import cached_password_hash, create_auth_user
 from tests.db_support import get_role_id, unique_suffix
 from tests.users_support import (
     NEW_PASSWORD,
@@ -111,7 +111,7 @@ async def test_ca37_put_that_deactivates_emits_user_deactivated(
 ) -> None:
     """CA-37/regla 47: el paso de activo a inactivo por PUT emite `user.deactivated`."""
     _, headers = await admin_actor(db_conn)
-    target_id = await create_auth_user(db_conn, role="MEDICO")
+    target_id = await create_auth_user(db_conn, role="MEDICO", password_hash=cached_password_hash())
     target = await fetch_user_row(db_conn, target_id)
     assert target is not None
     caplog.set_level(logging.INFO)

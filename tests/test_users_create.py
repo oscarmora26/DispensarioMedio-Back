@@ -8,7 +8,13 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from tests.auth_support import LOGIN_PATH, ME_PATH, auth_headers, create_auth_user
+from tests.auth_support import (
+    LOGIN_PATH,
+    ME_PATH,
+    auth_headers,
+    cached_password_hash,
+    create_auth_user,
+)
 from tests.db_support import create_doctor, get_role_id, unique_suffix
 from tests.users_support import (
     PASSWORD,
@@ -136,7 +142,12 @@ async def test_ca13_duplicates_are_case_insensitive_and_leave_original_untouched
     username = f"original_{tag}"
     email = f"original_{tag}@example.test"
     user_id = await create_auth_user(
-        db_conn, username=username, email=email, password=PASSWORD, role="MEDICO"
+        db_conn,
+        username=username,
+        email=email,
+        password=PASSWORD,
+        role="MEDICO",
+        password_hash=cached_password_hash(),
     )
     before = await fetch_user_row(db_conn, user_id)
     assert before is not None
@@ -177,7 +188,12 @@ async def test_ca14_doctor_already_assigned_conflict(
     """CA-14: un `doctor_id` asignado ⇒ 409 y no se crea el usuario."""
     _, headers = await admin_actor(db_conn)
     doctor_id = await create_doctor(db_conn)
-    await create_auth_user(db_conn, role="MEDICO", doctor_id=doctor_id)
+    await create_auth_user(
+        db_conn,
+        role="MEDICO",
+        doctor_id=doctor_id,
+        password_hash=cached_password_hash(),
+    )
     medico_role_id = await get_role_id(db_conn, "MEDICO")
     tag = unique_suffix()
 
@@ -255,6 +271,7 @@ async def test_ca16_invalid_role_and_doctor_with_precedence(
         username=duplicate_username,
         email=f"dup_{tag}@example.test",
         role="MEDICO",
+        password_hash=cached_password_hash(),
     )
     precedence = await auth_client.post(
         USERS_PATH,
