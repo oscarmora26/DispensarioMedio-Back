@@ -17,6 +17,25 @@ services:
       retries: 10
       start_period: 5s
 
+  test-db:
+    image: postgres:17-alpine
+    container_name: dispensario-test-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dispensario}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dispensario}
+      POSTGRES_DB: dispensario_test
+    ports:
+      - "${POSTGRES_TEST_PORT:-5434}:5432"
+    command: postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
   api:
     build:
       context: .

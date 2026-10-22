@@ -6,6 +6,7 @@ por el fixture `db_conn`; nada de lo que se escribe aqui debe persistir.
 
 from __future__ import annotations
 
+import os
 import uuid
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -19,6 +20,40 @@ from sqlalchemy.pool import NullPool
 from app.core.config import get_settings
 
 Params = Mapping[str, Any]
+
+
+def resolve_test_database_url() -> str:
+    """URL de la base que usa la suite (paso 3: BD dedicada `test-db`).
+
+    `TEST_DATABASE_URL` del entorno cuando existe y no esta vacia; si no,
+    `get_settings().database_url` (BD de desarrollo, comportamiento previo).
+    """
+    override = os.environ.get("TEST_DATABASE_URL", "").strip()
+    if override:
+        return override
+    return get_settings().database_url
+
+
+async def require_migrated_database(connection: AsyncConnection) -> None:
+    """Falla con un mensaje accionable si la BD de la suite no esta migrada.
+
+    Solo verifica `alembic_version`; nunca ejecuta migraciones dentro de los
+    tests. Los errores de conexion se propagan tal cual (no son falta de
+    migracion y su mensaje original es mas util).
+    """
+    version_table = await connection.scalar(text("SELECT to_regclass('public.alembic_version')"))
+    versions: list[object] = []
+    if version_table is not None:
+        result = await connection.execute(text("SELECT version_num FROM alembic_version"))
+        versions = list(result.all())
+    if version_table is None or not versions:
+        raise RuntimeError(
+            "La base de datos de tests no esta migrada (falta la tabla "
+            "'alembic_version' o no tiene ninguna version aplicada). Aplica "
+            "las migraciones con `alembic upgrade head` contra "
+            "TEST_DATABASE_URL antes de ejecutar la suite; los tests no "
+            "migran la base automaticamente."
+        )
 
 
 async def fetch_scalar(conn: AsyncConnection, sql: str, params: Params | None = None) -> Any:
@@ -35,7 +70,7 @@ async def fetch_all(conn: AsyncConnection, sql: str, params: Params | None = Non
 
 async def fetch_scalar_in_new_connection(sql: str, params: Params | None = None) -> Any:
     """Consulta con engine propio, para tests que no pueden compartir transaccion."""
-    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    engine = create_async_engine(resolve_test_database_url(), poolclass=NullPool)
     try:
         async with engine.connect() as conn:
             return await fetch_scalar(conn, sql, params)

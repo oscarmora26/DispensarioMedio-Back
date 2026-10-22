@@ -13,6 +13,7 @@ from app.core.rate_limit import get_login_rate_limiter
 from app.db.session import get_session
 from app.main import app
 from tests.auth_support import cached_password_hash
+from tests.db_support import require_migrated_database, resolve_test_database_url
 
 DEFAULT_CLIENT = ("127.0.0.1", 1234)
 
@@ -29,12 +30,18 @@ async def client() -> AsyncIterator[AsyncClient]:
 async def db_engine() -> AsyncIterator[AsyncEngine]:
     """Motor compartido por toda la sesion (paso 2 de la optimizacion).
 
+    Apunta a `TEST_DATABASE_URL` cuando existe y no esta vacia (paso 3: BD
+    dedicada `test-db`) y a `get_settings().database_url` en caso contrario.
     Con `NullPool` no se retiene ninguna conexion entre tests: cada `db_conn`
     abre la suya y la cierra al terminar, asi que compartir el motor es seguro
     y evita crearlo y destruirlo 500+ veces.
+
+    La base debe estar migrada de antemano; los tests nunca migran solos.
     """
-    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    engine = create_async_engine(resolve_test_database_url(), poolclass=NullPool)
     try:
+        async with engine.connect() as connection:
+            await require_migrated_database(connection)
         yield engine
     finally:
         await engine.dispose()
@@ -54,9 +61,10 @@ def _warmed_password_hashes() -> str:
 async def db_conn(db_engine: AsyncEngine) -> AsyncIterator[AsyncConnection]:
     """Conexion con una transaccion que se revierte al terminar cada test.
 
-    Los tests de integracion comparten la base de desarrollo (ya migrada con
-    `alembic upgrade head`), pero nunca dejan datos: todo ocurre dentro de una
-    transaccion que se deshace al finalizar.
+    Los tests de integracion comparten la base resuelta por
+    `resolve_test_database_url` (ya migrada con `alembic upgrade head`), pero
+    nunca dejan datos: todo ocurre dentro de una transaccion que se deshace
+    al finalizar.
     """
     async with db_engine.connect() as connection:
         transaction = await connection.begin()

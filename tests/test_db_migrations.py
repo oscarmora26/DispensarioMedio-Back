@@ -1,11 +1,13 @@
 """Tests de integracion de las migraciones Alembic (CA-5, CA-17 a CA-21).
 
-Ejecutan la CLI real de Alembic sobre la base configurada en `DATABASE_URL`.
+Ejecutan la CLI real de Alembic sobre la base resuelta por
+`resolve_test_database_url` (`TEST_DATABASE_URL` o BD de desarrollo).
 Cada test restaura `head` al terminar para no dejar la base a medias.
 """
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from collections.abc import AsyncIterator
@@ -17,8 +19,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.core.config import get_settings
-from tests.db_support import fetch_scalar_in_new_connection
+from tests.db_support import (
+    fetch_scalar_in_new_connection,
+    require_migrated_database,
+    resolve_test_database_url,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 TIMEOUT_SECONDS = 180
@@ -38,7 +43,7 @@ DOCTORS_BACKUP_SQL = """
 
 async def _fetch_rows(sql: str) -> list[dict[str, Any]]:
     """Lee filas en una conexion nueva fuera de la transaccion de los tests."""
-    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    engine = create_async_engine(resolve_test_database_url(), poolclass=NullPool)
     try:
         async with engine.connect() as conn:
             result = await conn.execute(text(sql))
@@ -49,7 +54,7 @@ async def _fetch_rows(sql: str) -> list[dict[str, Any]]:
 
 async def _execute(sql: str, params: dict[str, Any] | None = None) -> None:
     """Ejecuta una sentencia en una conexion nueva (autocommit)."""
-    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    engine = create_async_engine(resolve_test_database_url(), poolclass=NullPool)
     try:
         async with engine.begin() as conn:
             await conn.execute(text(sql), params or {})
@@ -61,11 +66,22 @@ async def _execute(sql: str, params: dict[str, Any] | None = None) -> None:
 async def preserve_permanent_dev_accounts() -> AsyncIterator[None]:
     """Protege los usuarios y medicos ya existentes ante `downgrade base`.
 
-    La BD de desarrollo contiene cuentas permanentes creadas por el humano
-    (`admin` y `medico`). Los tests de migraciones legitiman `downgrade base`,
-    que borra todas las tablas; este fixture guarda esas filas y las restaura
-    despues de cada test. Las filas que el propio test crea no se tocan.
+    La BD bajo prueba puede contener cuentas permanentes creadas por el humano
+    (`admin` y `medico` en desarrollo). Los tests de migraciones legitiman
+    `downgrade base`, que borra todas las tablas; este fixture guarda esas
+    filas y las restaura despues de cada test. Las filas que el propio test
+    crea no se tocan.
+
+    Falla con el mismo mensaje accionable que `db_engine` si la base no esta
+    migrada (estos tests no piden `db_engine`, asi que verifican por su cuenta
+    antes de tocar tablas de dominio).
     """
+    check_engine = create_async_engine(resolve_test_database_url(), poolclass=NullPool)
+    try:
+        async with check_engine.connect() as check_conn:
+            await require_migrated_database(check_conn)
+    finally:
+        await check_engine.dispose()
     doctors = await _fetch_rows(DOCTORS_BACKUP_SQL)
     users = await _fetch_rows(USERS_BACKUP_SQL)
     yield
@@ -108,7 +124,8 @@ async def preserve_permanent_dev_accounts() -> AsyncIterator[None]:
 
 
 def run_alembic(*args: str) -> subprocess.CompletedProcess[str]:
-    """Ejecuta `python -m alembic` desde la raiz del repositorio."""
+    """Ejecuta `python -m alembic` contra la BD de la suite desde la raiz."""
+    env = {**os.environ, "DATABASE_URL": resolve_test_database_url()}
     return subprocess.run(
         [sys.executable, "-m", "alembic", *args],
         cwd=ROOT,
@@ -116,6 +133,7 @@ def run_alembic(*args: str) -> subprocess.CompletedProcess[str]:
         text=True,
         timeout=TIMEOUT_SECONDS,
         check=False,
+        env=env,
     )
 
 
