@@ -19,7 +19,7 @@
 
 ## Feature activa
 
-Ninguna. FEAT-009 cerrada como `done`; el humano decide la siguiente.
+Ninguna. FEAT-010 cerrada como `done`; el humano decide la siguiente.
 
 ## Backlog
 
@@ -34,7 +34,7 @@ Ninguna. FEAT-009 cerrada como `done`; el humano decide la siguiente.
 | FEAT-007 | Gestión de tipos de fármacos: CRUD, permisos y desactivación lógica | `done` | [FEAT-007](docs/features/FEAT-007.md) | FEAT-003 | 2026-10-21 |
 | FEAT-008 | Gestión de marcas: CRUD, permisos y desactivación lógica | `done` | [FEAT-008](docs/features/FEAT-008.md) | FEAT-003 | 2026-10-21 |
 | FEAT-009 | Gestión de ubicaciones: CRUD, permisos y desactivación lógica | `done` | [FEAT-009](docs/features/FEAT-009.md) | FEAT-003 | 2026-10-22 |
-| FEAT-010 | Gestión de medicamentos: CRUD, permisos y desactivación lógica | `proposed` | [FEAT-010](docs/features/FEAT-010.md) | FEAT-003, FEAT-007, FEAT-008, FEAT-009 | 2026-10-22 |
+| FEAT-010 | Gestión de medicamentos: CRUD, permisos y desactivación lógica | `done` | [FEAT-010](docs/features/FEAT-010.md) | FEAT-003, FEAT-007, FEAT-008, FEAT-009 | 2026-10-22 |
 
 > FEAT-001 se ejecutó por instrucción directa del humano como línea base del proyecto, fuera del ciclo spec → implement → review.
 
@@ -100,3 +100,7 @@ proposed/approved ──(humano)──> rejected
 - 2026-10-22 — FEAT-009 `in_progress` → `in_review`. Implementación completa (schemas, repository, service, routes + registro en router); `ruff` limpio, `alembic check` limpio y 426 tests existentes en verde (aún sin tests de FEAT-009). Sin migraciones.
 - 2026-10-22 — FEAT-009 `in_review` → `done`: reviewer emite `APPROVED`; 40 tests nuevos y **466 tests en verde**, `ruff check`/`format --check` limpios y `alembic check` sin diferencias. Hallazgos menores no bloqueantes en `docs/reviews/FEAT-009.md` (doble consulta en `find_by_position`, `_ensure_unique` carga entidad, `PUT` sin cambios refresca `updated_at`). Commit local `feat(FEAT-009)`.
 - 2026-10-22 — FEAT-010 registrada como `proposed` a pedido del humano: gestión de medicamentos (US-20, US-21, US-22, RF-07, E3/E4). Alcance previsto: CRUD `/medications` con `description/drug_type_id/brand_id/location_id/dose` (CITEXT), combinación única `(description, brand_id, dose)`, permisos ADMIN escritura / MEDICO lectura y desactivación lógica. Depende de FEAT-003, FEAT-007, FEAT-008, FEAT-009. Pendiente de aprobación explícita del humano.
+- 2026-10-22 — FEAT-010 `proposed` → `approved`: aprobación explícita del humano ("Sí, aprobar e iniciar" vía pregunta de aprobación). Queda `approved`, lista para especificación.
+- 2026-10-22 — FEAT-010 `approved` → `in_progress`. Spec en `docs/features/FEAT-010.md` (35 reglas, D-1…D-11, CA-1…CA-30, SUP-1…SUP-4): CRUD `/medications` con `description/dose` 1..100 CITEXT, FKs obligatorios, única `(description,brand_id,dose)` CITEXT, ADMIN escritura / MEDICO lectura, PUT reemplazo completo 6 campos, DELETE 204 idempotente y `clock_timestamp()` para `updated_at`. Preguntas no bloqueantes: formato de `dose` y longitud 1..100.
+- 2026-10-22 — FEAT-010 `in_progress` → `in_review`. Implementación completa (schemas, repository, service, routes + registro en router); `ruff`/`format` limpios, `alembic check` limpio y 466 tests existentes en verde (aún sin tests de FEAT-010). Sin migraciones.
+- 2026-10-22 — FEAT-010 `in_review` → `done`: reviewer emite `APPROVED`; 41 tests nuevos y **507 tests en verde**, `ruff check`/`format --check` limpios y `alembic check` sin diferencias. Hallazgos menores no bloqueantes (doble consulta en `find_by_identity`, `_touch` en PUT sin cambios). Informe en `docs/reviews/FEAT-010.md`. Commit local `feat(FEAT-010)`.
