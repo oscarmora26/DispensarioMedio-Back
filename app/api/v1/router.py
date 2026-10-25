@@ -12,6 +12,7 @@ from app.api.v1.routes import (
     medications,
     patients,
     users,
+    visits,
 )
 
 api_router = APIRouter()
@@ -24,3 +25,4 @@ api_router.include_router(locations.router)
 api_router.include_router(medications.router)
 api_router.include_router(patients.router)
 api_router.include_router(doctors.router)
+api_router.include_router(visits.router)
