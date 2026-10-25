@@ -359,3 +359,4 @@ Ninguna bloqueante. Resueltas por el documento de API o por decisión documentad
 | Fecha | Cambio |
 |---|---|
 | 2026-10-24 | Spec inicial para implementación (aprobación humana del bloque FEAT-011…014). |
+| 2026-10-24 | Entrega en dos commits por grupo de endpoints con sus tests: `7a82565` grupo lectura (listado, detalle, perfil, authz, unit) y `2066dd0` grupo escritura (CRUD, visitas, integridad, logs). Suite **595 passed** (45 nuevos). Reviewer emite `APPROVED`; informe en `docs/reviews/FEAT-012.md`. |

@@ -19,7 +19,7 @@
 
 ## Feature activa
 
-FEAT-012 (`in_progress`): spec en `docs/features/FEAT-012.md` (38 CA), implementación de `/doctors` en curso. FEAT-013…FEAT-014 siguen `approved` en secuencia 012 → 013 → 014.
+FEAT-013 (`in_progress`): especificación de visitas en curso (`docs/features/FEAT-013.md`). FEAT-014 sigue `approved` en secuencia 013 → 014.
 
 ## Backlog
 
@@ -36,8 +36,8 @@ FEAT-012 (`in_progress`): spec en `docs/features/FEAT-012.md` (38 CA), implement
 | FEAT-009 | Gestión de ubicaciones: CRUD, permisos y desactivación lógica | `done` | [FEAT-009](docs/features/FEAT-009.md) | FEAT-003 | 2026-10-22 |
 | FEAT-010 | Gestión de medicamentos: CRUD, permisos y desactivación lógica | `done` | [FEAT-010](docs/features/FEAT-010.md) | FEAT-003, FEAT-007, FEAT-008, FEAT-009 | 2026-10-22 |
 | FEAT-011 | Gestión de pacientes: CRUD, validación de cédula/carnet y búsqueda rápida | `done` | [FEAT-011](docs/features/FEAT-011.md) | FEAT-003 | 2026-10-24 |
-| FEAT-012 | Gestión de médicos: CRUD, asociación usuario-médico y perfil | `in_progress` | [FEAT-012](docs/features/FEAT-012.md) | FEAT-003, FEAT-004 | 2026-10-24 |
-| FEAT-013 | Registro y gestión de visitas: registrar, listar, detalle, editar y anular | `approved` | [FEAT-013](docs/features/FEAT-013.md) | FEAT-010, FEAT-011, FEAT-012 | 2026-10-24 |
+| FEAT-012 | Gestión de médicos: CRUD, asociación usuario-médico y perfil | `done` | [FEAT-012](docs/features/FEAT-012.md) | FEAT-003, FEAT-004 | 2026-10-24 |
+| FEAT-013 | Registro y gestión de visitas: registrar, listar, detalle, editar y anular | `in_progress` | [FEAT-013](docs/features/FEAT-013.md) | FEAT-010, FEAT-011, FEAT-012 | 2026-10-24 |
 | FEAT-014 | Consulta de visitas por criterios y reporte de visitas (JSON/CSV) | `approved` | [FEAT-014](docs/features/FEAT-014.md) | FEAT-013 | 2026-10-24 |
 
 > FEAT-001 se ejecutó por instrucción directa del humano como línea base del proyecto, fuera del ciclo spec → implement → review.
@@ -118,3 +118,4 @@ proposed/approved ──(humano)──> rejected
 - 2026-10-24 — FEAT-014 registrada como `proposed` a pedido del humano (mismo pedido que FEAT-011): consulta por criterios y reporte de visitas (US-34, US-35, US-36, RF-15, RF-16, RF-21, E7). Alcance previsto: `GET /reports/visits` con `date_from`/`date_to` obligatorios (`date_from <= date_to`), filtros opcionales `doctor_id`/`patient_id`/`status`, resumen (totales por médico) + detalle paginado, filtro de propiedad (médico solo sus visitas), zona horaria `America/Santo_Domingo` y `GET /reports/visits/export` en CSV. PDF diferido a decisión humana (pregunta abierta §14.2 del doc de requerimientos). Pendiente de aprobación explícita del humano.
 - 2026-10-24 — FEAT-011 `in_review` → `done` (retoma tras la parada del humano): verificación de la rama `feat/FEAT-011-pacientes` en el commit `a97fc94` — suite **550 passed**, `ruff check`/`format --check` limpios, `alembic check` sin diferencias y OpenAPI CA-34 verificado por shell (5 rutas con tag `patients`, summaries y códigos). Reviewer emite **APPROVED**: 43 tests nuevos cubren CA-1…CA-35 y las reglas 33/36; solo sugerencias no bloqueantes (slice de 2.591 líneas justificado en la spec; cambios ajenos en `AGENTS.md`/`.opencode/opencode.json` fuera de los commits de features). Informe en `docs/reviews/FEAT-011.md`. Pendiente de push humano (prohibido para agentes).
 - 2026-10-24 — FEAT-012 `approved` → `in_progress`. Especificación en `docs/features/FEAT-012.md` (reglas 1–37, D-1…D-13, CA-1…CA-38): CRUD `/doctors` con `name/cedula/lab_shift/specialty`, cédula única de 11 dígitos, perfil de solo lectura del médico (lista filtrada a su registro y detalle ajeno ⇒ 404), desactivación lógica bloqueada con `409 doctor_has_visits` si el médico tiene visitas, asociación usuario↔médico gestionada por `/users` (regresión cubierta). Estrategia de commits: un commit por grupo de endpoints con sus tests.
+- 2026-10-24 — FEAT-012 `in_progress` → `done` (continuación del bloque aprobado): reviewer emite **APPROVED** con **595 tests en verde** (45 nuevos), `ruff check`/`format --check` limpios, `alembic check` sin diferencias y OpenAPI verificado por shell. Implementación en dos commits por grupo de endpoints: `7a82565` lectura/perfil y `2066dd0` escritura/integridad/logs (estrategia de slices registrada en la spec). Informe en `docs/reviews/FEAT-012.md`. FEAT-013 queda `in_progress`.
