@@ -19,7 +19,7 @@
 
 ## Feature activa
 
-Ninguna. FEAT-011 está en `in_review` con commit local en la rama `feat/FEAT-011-pacientes`; falta la verificación independiente y el veredicto del reviewer. FEAT-012…FEAT-014 siguen `approved` en secuencia 011 → 012 → 013 → 014.
+FEAT-012 (`in_progress`): spec en `docs/features/FEAT-012.md` (38 CA), implementación de `/doctors` en curso. FEAT-013…FEAT-014 siguen `approved` en secuencia 012 → 013 → 014.
 
 ## Backlog
 
@@ -35,8 +35,8 @@ Ninguna. FEAT-011 está en `in_review` con commit local en la rama `feat/FEAT-01
 | FEAT-008 | Gestión de marcas: CRUD, permisos y desactivación lógica | `done` | [FEAT-008](docs/features/FEAT-008.md) | FEAT-003 | 2026-10-21 |
 | FEAT-009 | Gestión de ubicaciones: CRUD, permisos y desactivación lógica | `done` | [FEAT-009](docs/features/FEAT-009.md) | FEAT-003 | 2026-10-22 |
 | FEAT-010 | Gestión de medicamentos: CRUD, permisos y desactivación lógica | `done` | [FEAT-010](docs/features/FEAT-010.md) | FEAT-003, FEAT-007, FEAT-008, FEAT-009 | 2026-10-22 |
-| FEAT-011 | Gestión de pacientes: CRUD, validación de cédula/carnet y búsqueda rápida | `in_review` | [FEAT-011](docs/features/FEAT-011.md) | FEAT-003 | 2026-10-24 |
-| FEAT-012 | Gestión de médicos: CRUD, asociación usuario-médico y perfil | `approved` | [FEAT-012](docs/features/FEAT-012.md) | FEAT-003, FEAT-004 | 2026-10-24 |
+| FEAT-011 | Gestión de pacientes: CRUD, validación de cédula/carnet y búsqueda rápida | `done` | [FEAT-011](docs/features/FEAT-011.md) | FEAT-003 | 2026-10-24 |
+| FEAT-012 | Gestión de médicos: CRUD, asociación usuario-médico y perfil | `in_progress` | [FEAT-012](docs/features/FEAT-012.md) | FEAT-003, FEAT-004 | 2026-10-24 |
 | FEAT-013 | Registro y gestión de visitas: registrar, listar, detalle, editar y anular | `approved` | [FEAT-013](docs/features/FEAT-013.md) | FEAT-010, FEAT-011, FEAT-012 | 2026-10-24 |
 | FEAT-014 | Consulta de visitas por criterios y reporte de visitas (JSON/CSV) | `approved` | [FEAT-014](docs/features/FEAT-014.md) | FEAT-013 | 2026-10-24 |
 
@@ -116,3 +116,5 @@ proposed/approved ──(humano)──> rejected
 - 2026-10-24 — FEAT-012 registrada como `proposed` a pedido del humano (mismo pedido que FEAT-011): gestión de médicos (US-26, US-27, US-28, RF-09, RF-10, E5). Alcance previsto: CRUD `/doctors` con `name/cedula/lab_shift/specialty`, cédula única de 11 dígitos, asociación uno a uno usuario↔médico (solo rol `MEDICO`), perfil de solo lectura del médico autenticado, permisos ADMIN escritura / MEDICO lectura de su perfil y desactivación lógica. Pendiente de aprobación explícita del humano.
 - 2026-10-24 — FEAT-013 registrada como `proposed` a pedido del humano (mismo pedido que FEAT-011): registro y gestión de visitas (US-30, US-31, US-32, RF-11, RF-12, RF-13, RF-14, RF-17, E6). Alcance previsto: `POST/GET /visits`, `GET/PUT /visits/{id}`, `POST /visits/{id}/annul`; médico del token para rol `MEDICO`, `doctor_id` seleccionable solo por ADMIN, sin fechas futuras, síntomas 3..2000, recomendaciones ≤2000 opcionales, medicamentos activos opcionales con `quantity`/`instructions`, estado `REGISTRADA`/`ANULADA`, médico solo ve sus visitas, edición y anulación solo ADMIN con motivo y auditoría, visita anulada no editable. Pendiente de aprobación explícita del humano.
 - 2026-10-24 — FEAT-014 registrada como `proposed` a pedido del humano (mismo pedido que FEAT-011): consulta por criterios y reporte de visitas (US-34, US-35, US-36, RF-15, RF-16, RF-21, E7). Alcance previsto: `GET /reports/visits` con `date_from`/`date_to` obligatorios (`date_from <= date_to`), filtros opcionales `doctor_id`/`patient_id`/`status`, resumen (totales por médico) + detalle paginado, filtro de propiedad (médico solo sus visitas), zona horaria `America/Santo_Domingo` y `GET /reports/visits/export` en CSV. PDF diferido a decisión humana (pregunta abierta §14.2 del doc de requerimientos). Pendiente de aprobación explícita del humano.
+- 2026-10-24 — FEAT-011 `in_review` → `done` (retoma tras la parada del humano): verificación de la rama `feat/FEAT-011-pacientes` en el commit `a97fc94` — suite **550 passed**, `ruff check`/`format --check` limpios, `alembic check` sin diferencias y OpenAPI CA-34 verificado por shell (5 rutas con tag `patients`, summaries y códigos). Reviewer emite **APPROVED**: 43 tests nuevos cubren CA-1…CA-35 y las reglas 33/36; solo sugerencias no bloqueantes (slice de 2.591 líneas justificado en la spec; cambios ajenos en `AGENTS.md`/`.opencode/opencode.json` fuera de los commits de features). Informe en `docs/reviews/FEAT-011.md`. Pendiente de push humano (prohibido para agentes).
+- 2026-10-24 — FEAT-012 `approved` → `in_progress`. Especificación en `docs/features/FEAT-012.md` (reglas 1–37, D-1…D-13, CA-1…CA-38): CRUD `/doctors` con `name/cedula/lab_shift/specialty`, cédula única de 11 dígitos, perfil de solo lectura del médico (lista filtrada a su registro y detalle ajeno ⇒ 404), desactivación lógica bloqueada con `409 doctor_has_visits` si el médico tiene visitas, asociación usuario↔médico gestionada por `/users` (regresión cubierta). Estrategia de commits: un commit por grupo de endpoints con sus tests.
