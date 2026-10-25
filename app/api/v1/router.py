@@ -11,6 +11,7 @@ from app.api.v1.routes import (
     locations,
     medications,
     patients,
+    reports,
     users,
     visits,
 )
@@ -26,3 +27,4 @@ api_router.include_router(medications.router)
 api_router.include_router(patients.router)
 api_router.include_router(doctors.router)
 api_router.include_router(visits.router)
+api_router.include_router(reports.router)

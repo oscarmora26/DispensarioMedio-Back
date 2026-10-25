@@ -326,6 +326,11 @@ def _to_list_item(visit: Visit) -> VisitListItem:
     )
 
 
+def to_list_item(visit: Visit) -> VisitListItem:
+    """Public wrapper of the D-8 summary shape, reused by the report layer (FEAT-014)."""
+    return _to_list_item(visit)
+
+
 async def list_visits(
     session: AsyncSession,
     *,

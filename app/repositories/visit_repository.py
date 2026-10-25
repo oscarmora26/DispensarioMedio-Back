@@ -9,6 +9,7 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, selectinload
 
+from app.models.doctor import Doctor
 from app.models.visit import Visit
 from app.models.visit_medication import VisitMedication
 from app.repositories.drug_type_repository import escape_like
@@ -103,6 +104,46 @@ def _ordered(
     if sort_field != "id":
         order_by.append(Visit.id.desc())
     return statement.order_by(*order_by)
+
+
+async def summarize_visits(
+    session: AsyncSession,
+    *,
+    doctor_id: int | None,
+    patient_id: int | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    status: str | None,
+) -> tuple[int, list[tuple[int, str, int]]]:
+    """Return the total and the per-doctor totals of the report (FEAT-014).
+
+    Reuses `_list_conditions` so the summary applies exactly the same `AND`
+    filters as the paginated detail of `list_visits` (FEAT-014 rules 7, 13).
+    """
+    conditions = _list_conditions(
+        doctor_id=doctor_id,
+        patient_id=patient_id,
+        date_from=date_from,
+        date_to=date_to,
+        medication_id=None,
+        status=status,
+        q=None,
+    )
+
+    total_result = await session.execute(select(func.count(Visit.id)).where(*conditions))
+    total = int(total_result.scalar_one())
+
+    grouped_total = func.count(Visit.id)
+    statement = (
+        select(Visit.doctor_id, Doctor.name, grouped_total)
+        .join(Doctor, Doctor.id == Visit.doctor_id)
+        .where(*conditions)
+        .group_by(Visit.doctor_id, Doctor.name)
+        .order_by(grouped_total.desc(), Doctor.name.asc(), Visit.doctor_id.asc())
+    )
+    result = await session.execute(statement)
+    by_doctor = [(int(row[0]), str(row[1]), int(row[2])) for row in result.all()]
+    return total, by_doctor
 
 
 async def list_visits(
