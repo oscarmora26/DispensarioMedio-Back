@@ -24,6 +24,7 @@ from app.models.mixins import UpdatedAtMixin
 
 if TYPE_CHECKING:
     from app.models.doctor import Doctor
+    from app.models.refresh_token import RefreshToken
     from app.models.role import Role
 
 
@@ -59,3 +60,9 @@ class User(UpdatedAtMixin, Base):
 
     role: Mapped[Role] = relationship(back_populates="users", lazy="raise")
     doctor: Mapped[Doctor | None] = relationship(back_populates="user", lazy="raise")
+    refresh_tokens: Mapped[list[RefreshToken]] = relationship(
+        back_populates="user",
+        lazy="raise",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )

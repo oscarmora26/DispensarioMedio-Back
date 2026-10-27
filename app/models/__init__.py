@@ -11,6 +11,7 @@ from app.models.doctor import Doctor
 from app.models.drug_type import DrugType
 from app.models.medication import Medication
 from app.models.patient import Patient
+from app.models.refresh_token import RefreshToken
 from app.models.role import Role
 from app.models.shelf import Shelf
 from app.models.user import User
@@ -25,6 +26,7 @@ __all__ = [
     "DrugType",
     "Medication",
     "Patient",
+    "RefreshToken",
     "Role",
     "Shelf",
     "User",

@@ -46,6 +46,7 @@ EXPECTED_TABLES = {
     "drug_types",
     "medications",
     "patients",
+    "refresh_tokens",
     "roles",
     "shelves",
     "users",
@@ -63,6 +64,7 @@ EXPECTED_MODEL_FILES = {
     "drug_type.py",
     "medication.py",
     "patient.py",
+    "refresh_token.py",
     "role.py",
     "shelf.py",
     "user.py",
@@ -84,6 +86,7 @@ EXPECTED_UQS = {
     "uq_cells_position",
     "uq_medications_identity",
     "uq_patients_cedula",
+    "uq_refresh_tokens_token_hash",
     "uq_visit_medications",
 }
 
@@ -97,6 +100,7 @@ EXPECTED_CKS = {
     "ck_visits_annulment_consistency",
     "ck_visit_medications_quantity_positive",
     "ck_audit_log_action_allowed",
+    "ck_refresh_tokens_revoked_reason_allowed",
 }
 
 EXPECTED_FKS = {
@@ -117,6 +121,12 @@ EXPECTED_FKS = {
         "RESTRICT",
     ),
     "fk_audit_log_user_id_users": ("audit_log", "users.id", "SET NULL"),
+    "fk_refresh_tokens_user_id_users": ("refresh_tokens", "users.id", "CASCADE"),
+    "fk_refresh_tokens_replaced_by_id_refresh_tokens": (
+        "refresh_tokens",
+        "refresh_tokens.id",
+        "RESTRICT",
+    ),
 }
 
 EXPECTED_FK_INDEXES = {
@@ -129,6 +139,8 @@ EXPECTED_FK_INDEXES = {
     "ix_visit_medications_medication_id",
     "ix_visits_created_by",
     "ix_visits_annulled_by",
+    "ix_refresh_tokens_user_id",
+    "ix_refresh_tokens_family_id",
 }
 
 #: Indices que existen en la base migrada y no son de FK explicitos del modelo.
@@ -168,6 +180,7 @@ EXPECTED_REVISION_ORDER = [
     "unaccent_extension",
     "shelves_cells_schema",
     "rename_medications_location_id_to_cell_id",
+    "refresh_tokens_schema",
 ]
 
 EXPECTED_REVISION_COUNT = len(EXPECTED_REVISION_ORDER)
@@ -176,6 +189,9 @@ EXPECTED_RELATIONSHIPS = {
     ("Role", "users"): False,
     ("User", "role"): True,
     ("User", "doctor"): True,
+    ("User", "refresh_tokens"): False,
+    ("RefreshToken", "user"): True,
+    ("RefreshToken", "replaced_by"): True,
     ("Doctor", "user"): True,
     ("Doctor", "visits"): False,
     ("DrugType", "medications"): False,
@@ -251,6 +267,7 @@ def test_ca01_metadata_contains_exactly_the_twelve_domain_tables() -> None:
         "drug_types",
         "medications",
         "patients",
+        "refresh_tokens",
         "roles",
         "shelves",
         "users",
@@ -300,6 +317,7 @@ def test_ca04_models_package_has_expected_files_and_exports() -> None:
         "DrugType",
         "Medication",
         "Patient",
+        "RefreshToken",
         "Role",
         "Shelf",
         "User",
@@ -476,8 +494,8 @@ def test_metadata_constraint_names_are_exact_and_not_double_prefixed() -> None:
     assert uqs == EXPECTED_UQS
     assert cks == EXPECTED_CKS
     assert fks == set(EXPECTED_FKS)
-    assert len(pks) + len(uqs) + len(cks) + len(fks) == 46
-    assert len(set().union(pks, uqs, cks, fks)) == 46
+    assert len(pks) + len(uqs) + len(cks) + len(fks) == 51
+    assert len(set().union(pks, uqs, cks, fks)) == 51
 
 
 def test_metadata_indexes_have_exact_names_and_options() -> None:
@@ -492,9 +510,9 @@ def test_metadata_indexes_have_exact_names_and_options() -> None:
     }
 
     assert set(indexes) | unique_constraints == EXPECTED_NON_PK_INDEXES
-    assert len(indexes) == 17
-    assert len(unique_constraints) == 12
-    assert len(set(indexes) | unique_constraints) == 29
+    assert len(indexes) == 19
+    assert len(unique_constraints) == 13
+    assert len(set(indexes) | unique_constraints) == 32
     assert "ix_patients_carnet" not in indexes
     assert "ix_cells_shelf_id" in indexes
 
@@ -536,8 +554,8 @@ def test_metadata_fk_delete_rules_match_the_spec() -> None:
         assert element.ondelete == ondelete, name
 
     ondeletes = [next(iter(fk.elements)).ondelete for fk in fks.values()]
-    assert ondeletes.count("RESTRICT") == 10
-    assert ondeletes.count("CASCADE") == 2
+    assert ondeletes.count("RESTRICT") == 11
+    assert ondeletes.count("CASCADE") == 3
     assert ondeletes.count("SET NULL") == 1
 
 

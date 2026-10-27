@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import secrets
 from datetime import UTC, datetime
 from typing import Any
 
@@ -12,6 +14,9 @@ from pwdlib.exceptions import UnknownHashError
 from app.core.config import get_settings
 
 _password_hash = PasswordHash.recommended()
+
+#: Entropia codificada del refresh token (64 bytes aleatorios => ~86 caracteres).
+REFRESH_TOKEN_BYTES = 64
 
 
 def hash_password(password: str) -> str:
@@ -74,3 +79,21 @@ def decode_access_token(
         if claim not in payload:
             raise jwt.InvalidTokenError(f"missing claim: {claim}")
     return payload
+
+
+def generate_refresh_token() -> str:
+    """Devuelve un refresh token opaco con 512 bits de entropia codificada.
+
+    No es un JWT: debe ser revocable, y para revocarlo hay que consultar la base
+    igual, asi que la firma no aportaria nada (FEAT-020 D-1).
+    """
+    return secrets.token_urlsafe(REFRESH_TOKEN_BYTES)
+
+
+def hash_refresh_token(token: str) -> str:
+    """Devuelve el SHA-256 hex del token; es lo unico que se persiste (D-2).
+
+    La entrada es aleatoria de alta entropia, de modo que un hash rapido basta:
+    no hay diccionario ni fuerza bruta viable sobre 512 bits.
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

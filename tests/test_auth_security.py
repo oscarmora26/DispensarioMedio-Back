@@ -23,6 +23,7 @@ JWT_KEYS = (
     "JWT_SECRET",
     "JWT_ALGORITHM",
     "JWT_EXPIRE_MINUTES",
+    "REFRESH_TOKEN_EXPIRE_DAYS",
     "LOGIN_RATE_LIMIT_MAX_ATTEMPTS",
     "LOGIN_RATE_LIMIT_WINDOW_SECONDS",
 )
@@ -60,7 +61,8 @@ def test_ca2_settings_defaults() -> None:
     settings = Settings(_env_file=None)
 
     assert settings.jwt_algorithm == "HS256"
-    assert settings.jwt_expire_minutes == 30
+    assert settings.jwt_expire_minutes == 15
+    assert settings.refresh_token_expire_days == 30
     assert settings.login_rate_limit_max_attempts == 5
     assert settings.login_rate_limit_window_seconds == 900
 
@@ -70,6 +72,8 @@ def test_ca2_settings_defaults() -> None:
     [
         {"jwt_expire_minutes": 0},
         {"jwt_expire_minutes": -1},
+        {"refresh_token_expire_days": 0},
+        {"refresh_token_expire_days": -1},
         {"login_rate_limit_max_attempts": 0},
         {"login_rate_limit_max_attempts": -5},
         {"login_rate_limit_window_seconds": 0},
@@ -108,7 +112,7 @@ def test_ca3_prod_rejects_example_and_short_secrets() -> None:
 def test_ca3_local_and_test_start_without_env_file() -> None:
     """CA-3: `local` y `test` arrancan sin `.env`."""
     assert Settings(_env_file=None).environment == "local"
-    assert Settings(_env_file=None, environment="test").jwt_expire_minutes == 30
+    assert Settings(_env_file=None, environment="test").jwt_expire_minutes == 15
 
 
 def test_ca3_only_hs256_is_accepted() -> None:

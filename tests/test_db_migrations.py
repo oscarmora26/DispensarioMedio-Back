@@ -182,17 +182,15 @@ async def test_ca21_upgrade_head_is_idempotent() -> None:
 async def test_ca17_downgrade_one_and_upgrade_head_roundtrips_the_last_revision() -> None:
     """CA-17: `downgrade -1` deshace la ultima revision y `upgrade head` la restaura.
 
-    Con la cadena actual la ultima revision es
-    `rename_medications_location_id_to_cell_id`; el resto del esquema y los
-    roles existentes no se tocan.
+    Con la cadena actual la ultima revision es `refresh_tokens_schema`; el resto
+    del esquema y los roles existentes no se tocan.
     """
     roles_before = {
         row["name"] for row in await _fetch_rows("SELECT name FROM roles ORDER BY name")
     }
-    cell_column_sql = (
-        "SELECT count(*) FROM information_schema.columns "
-        "WHERE table_schema = 'public' AND table_name = 'medications' "
-        "AND column_name = 'cell_id'"
+    refresh_table_sql = (
+        "SELECT count(*) FROM information_schema.tables "
+        "WHERE table_schema = 'public' AND table_name = 'refresh_tokens'"
     )
     try:
         alembic_ok("downgrade", "-1")
@@ -201,10 +199,10 @@ async def test_ca17_downgrade_one_and_upgrade_head_roundtrips_the_last_revision(
             row["name"] for row in await _fetch_rows("SELECT name FROM roles ORDER BY name")
         }
         assert roles_after == roles_before
-        assert await scalar(cell_column_sql) == 0
+        assert await scalar(refresh_table_sql) == 0
 
         alembic_ok("upgrade", "head")
-        assert await scalar(cell_column_sql) == 1
+        assert await scalar(refresh_table_sql) == 1
         roles = await scalar("SELECT count(*) FROM roles")
         assert roles == 2
     finally:
@@ -269,8 +267,8 @@ async def test_ca20_full_roundtrip_restores_the_expected_schema() -> None:
         roles = await scalar("SELECT count(*) FROM roles")
         users = await scalar("SELECT count(*) FROM users")
 
-        assert tables == 13
-        assert indexes == 41
+        assert tables == 14
+        assert indexes == 45
         assert extensions == 2
         assert roles == 2
         assert users == 0

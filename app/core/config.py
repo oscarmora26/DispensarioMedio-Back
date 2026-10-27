@@ -175,7 +175,10 @@ class Settings(BaseSettings):
     # JWT
     jwt_secret: str = DEFAULT_JWT_SECRET
     jwt_algorithm: Literal["HS256"] = "HS256"
-    jwt_expire_minutes: int = Field(default=30, gt=0)
+    jwt_expire_minutes: int = Field(default=15, gt=0)
+
+    # Refresh tokens (FEAT-020): credencial opaca persistida por hash.
+    refresh_token_expire_days: int = Field(default=30, gt=0)
 
     # Rate limiting del login
     login_rate_limit_max_attempts: int = Field(default=5, gt=0)
