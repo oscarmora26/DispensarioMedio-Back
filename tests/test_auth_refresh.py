@@ -515,6 +515,21 @@ async def test_ca19_logout_is_idempotent_without_oracle(
     assert unknown.content == b""
 
 
+async def test_ca19b_logout_revokes_a_rotated_token(
+    auth_client: AsyncClient, db_conn: AsyncConnection
+) -> None:
+    """Regla 23: un token ya rotado tambien queda revocado al cerrar esa sesion."""
+    username = f"user_{unique_suffix()}"
+    user_id = await create_auth_user(db_conn, username=username)
+    session = await login(auth_client, username)
+    assert (await refresh(auth_client, session["refresh_token"])).status_code == 200
+    body = {"refresh_token": session["refresh_token"]}
+    assert (await auth_client.post(LOGOUT_PATH, json=body)).status_code == 204
+    predecessor = (await fetch_tokens(db_conn, user_id))[0]
+    assert predecessor["revoked_reason"] == "logout"
+    assert predecessor["revoked_at"] is not None
+
+
 async def test_ca20_logout_does_not_affect_other_sessions(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:

@@ -302,8 +302,9 @@ async def logout(session: AsyncSession, *, refresh_token: str) -> None:
     token_hash = hash_refresh_token(refresh_token)
     row = await refresh_token_repository.get_by_hash_for_update(session, token_hash)
 
-    # Token inexistente, ya revocado o ya rotado: mismo 204 sin distinguir el caso.
-    if row is None or row.revoked_at is not None or row.replaced_by_id is not None:
+    # Token inexistente o ya revocado: mismo 204 sin distinguir el caso. Un token
+    # rotado sigue siendo una sesion conocida del cliente y tambien se revoca (regla 23).
+    if row is None or row.revoked_at is not None:
         return
 
     row.revoked_at = datetime.now(UTC)
