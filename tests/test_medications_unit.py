@@ -31,7 +31,7 @@ def _valid_payload(**overrides: object) -> dict[str, object]:
         "description": "Acetaminofén",
         "drug_type_id": 1,
         "brand_id": 3,
-        "location_id": 7,
+        "cell_id": 7,
         "dose": "500 mg",
     }
     payload.update(overrides)
@@ -51,10 +51,10 @@ def test_u1_create_requires_five_fields_strips_and_defaults_active() -> None:
 
     with pytest.raises(ValidationError) as missing_all:
         MedicationCreate()  # type: ignore[call-arg]
-    _field_of(missing_all.value, "description", "drug_type_id", "brand_id", "location_id", "dose")
+    _field_of(missing_all.value, "description", "drug_type_id", "brand_id", "cell_id", "dose")
 
     base = _valid_payload()
-    for field in ("description", "drug_type_id", "brand_id", "location_id", "dose"):
+    for field in ("description", "drug_type_id", "brand_id", "cell_id", "dose"):
         payload = dict(base)
         del payload[field]
         with pytest.raises(ValidationError) as missing:
@@ -74,7 +74,7 @@ def test_u1_create_requires_five_fields_strips_and_defaults_active() -> None:
         assert getattr(MedicationCreate(**_valid_payload(**{field: "Q"})), field) == "Q"  # type: ignore[arg-type]
         assert getattr(MedicationCreate(**_valid_payload(**{field: "B" * 100})), field) == "B" * 100  # type: ignore[arg-type]
 
-    for field in ("drug_type_id", "brand_id", "location_id"):
+    for field in ("drug_type_id", "brand_id", "cell_id"):
         for invalid in (0, -1):
             with pytest.raises(ValidationError) as bad_fk:
                 MedicationCreate(**_valid_payload(**{field: invalid}))  # type: ignore[arg-type]
@@ -92,7 +92,7 @@ def test_u2_update_requires_all_six_fields_and_accepts_false() -> None:
     assert stripped.description == "Med"
 
     base = _valid_payload(is_active=True)
-    for field in ("description", "drug_type_id", "brand_id", "location_id", "dose", "is_active"):
+    for field in ("description", "drug_type_id", "brand_id", "cell_id", "dose", "is_active"):
         partial = dict(base)
         del partial[field]
         with pytest.raises(ValidationError) as missing:
@@ -111,7 +111,7 @@ def test_u3_read_serializes_exactly_seven_keys() -> None:
         description="Acetaminofén",
         drug_type_id=1,
         brand_id=3,
-        location_id=7,
+        cell_id=7,
         dose="500 mg",
         is_active=True,
     ).model_dump()
@@ -120,7 +120,7 @@ def test_u3_read_serializes_exactly_seven_keys() -> None:
         "description",
         "drug_type_id",
         "brand_id",
-        "location_id",
+        "cell_id",
         "dose",
         "is_active",
     }
@@ -129,7 +129,7 @@ def test_u3_read_serializes_exactly_seven_keys() -> None:
         "description": "Acetaminofén",
         "drug_type_id": 1,
         "brand_id": 3,
-        "location_id": 7,
+        "cell_id": 7,
         "dose": "500 mg",
         "is_active": True,
     }
@@ -142,7 +142,7 @@ def test_u4_sort_catalog_accepts_sixteen_variants_and_rejects_the_rest() -> None
         "dose",
         "drug_type_id",
         "brand_id",
-        "location_id",
+        "cell_id",
         "created_at",
         "is_active",
         "id",
@@ -157,8 +157,8 @@ def test_u4_sort_catalog_accepts_sixteen_variants_and_rejects_the_rest() -> None
         "-drug_type_id": ("drug_type_id", True),
         "brand_id": ("brand_id", False),
         "-brand_id": ("brand_id", True),
-        "location_id": ("location_id", False),
-        "-location_id": ("location_id", True),
+        "cell_id": ("cell_id", False),
+        "-cell_id": ("cell_id", True),
         "created_at": ("created_at", False),
         "-created_at": ("created_at", True),
         "is_active": ("is_active", False),

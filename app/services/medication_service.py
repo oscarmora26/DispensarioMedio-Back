@@ -12,8 +12,8 @@ from app.models.medication import Medication
 from app.models.user import User
 from app.repositories import (
     brand_repository,
+    cell_repository,
     drug_type_repository,
-    location_repository,
     medication_repository,
 )
 from app.schemas.medication import (
@@ -31,11 +31,11 @@ MEDICATION_EXISTS_MESSAGE = "El medicamento ya existe"
 
 DRUG_TYPE_NOT_FOUND_MESSAGE = "El tipo de fármaco no existe"
 BRAND_NOT_FOUND_MESSAGE = "La marca no existe"
-LOCATION_NOT_FOUND_MESSAGE = "La ubicación no existe"
+CELL_NOT_FOUND_MESSAGE = "La celda no existe"
 
 DRUG_TYPE_INACTIVE_MESSAGE = "El tipo de fármaco está inactivo"
 BRAND_INACTIVE_MESSAGE = "La marca está inactiva"
-LOCATION_INACTIVE_MESSAGE = "La ubicación está inactiva"
+CELL_INACTIVE_MESSAGE = "La celda está inactiva"
 
 UNIQUE_CONSTRAINT = "uq_medications_identity"
 
@@ -66,7 +66,7 @@ def _to_read(medication: Medication) -> MedicationRead:
         description=medication.description,
         drug_type_id=medication.drug_type_id,
         brand_id=medication.brand_id,
-        location_id=medication.location_id,
+        cell_id=medication.cell_id,
         dose=medication.dose,
         is_active=medication.is_active,
     )
@@ -142,12 +142,12 @@ async def _validate_fks(
     *,
     drug_type_id: int,
     brand_id: int,
-    location_id: int,
+    cell_id: int,
 ) -> None:
     """Valida que los FK existan (404 del catalogo) y esten activos (422).
 
     Precedencia de la regla 23: primero inexistencia en orden
-    `drug_type_id`, `brand_id`, `location_id`; despues inactividad en el mismo
+    `drug_type_id`, `brand_id`, `cell_id`; despues inactividad en el mismo
     orden.
     """
     drug_type = await drug_type_repository.get_drug_type_by_id(session, drug_type_id)
@@ -158,9 +158,9 @@ async def _validate_fks(
     if brand is None:
         raise NotFoundError(BRAND_NOT_FOUND_MESSAGE, code="brand_not_found")
 
-    location = await location_repository.get_location_by_id(session, location_id)
-    if location is None:
-        raise NotFoundError(LOCATION_NOT_FOUND_MESSAGE, code="location_not_found")
+    cell = await cell_repository.get_cell_by_id(session, cell_id)
+    if cell is None:
+        raise NotFoundError(CELL_NOT_FOUND_MESSAGE, code="cell_not_found")
 
     if not drug_type.is_active:
         raise AppError(
@@ -176,12 +176,12 @@ async def _validate_fks(
             code="validation_error",
             errors=[{"field": "brand_id", "message": BRAND_INACTIVE_MESSAGE}],
         )
-    if not location.is_active:
+    if not cell.is_active:
         raise AppError(
-            LOCATION_INACTIVE_MESSAGE,
+            CELL_INACTIVE_MESSAGE,
             status_code=422,
             code="validation_error",
-            errors=[{"field": "location_id", "message": LOCATION_INACTIVE_MESSAGE}],
+            errors=[{"field": "cell_id", "message": CELL_INACTIVE_MESSAGE}],
         )
 
 
@@ -194,7 +194,7 @@ async def list_medications(
     is_active: bool | None = None,
     drug_type_id: int | None = None,
     brand_id: int | None = None,
-    location_id: int | None = None,
+    cell_id: int | None = None,
     sort: str = "description",
 ) -> MedicationListResponse:
     """Lista medicamentos con paginacion, busqueda, filtros de FK y orden."""
@@ -208,7 +208,7 @@ async def list_medications(
         is_active=is_active,
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
         sort_field=sort_field,
         sort_desc=sort_desc,
     )
@@ -239,7 +239,7 @@ async def create_medication(
         session,
         drug_type_id=payload.drug_type_id,
         brand_id=payload.brand_id,
-        location_id=payload.location_id,
+        cell_id=payload.cell_id,
     )
     await _ensure_unique(session, payload.description, payload.brand_id, payload.dose)
 
@@ -247,7 +247,7 @@ async def create_medication(
         description=payload.description,
         drug_type_id=payload.drug_type_id,
         brand_id=payload.brand_id,
-        location_id=payload.location_id,
+        cell_id=payload.cell_id,
         dose=payload.dose,
         is_active=payload.is_active,
     )
@@ -271,7 +271,7 @@ async def update_medication(
         session,
         drug_type_id=payload.drug_type_id,
         brand_id=payload.brand_id,
-        location_id=payload.location_id,
+        cell_id=payload.cell_id,
     )
     await _ensure_unique(
         session,
@@ -285,7 +285,7 @@ async def update_medication(
     medication.description = payload.description
     medication.drug_type_id = payload.drug_type_id
     medication.brand_id = payload.brand_id
-    medication.location_id = payload.location_id
+    medication.cell_id = payload.cell_id
     medication.dose = payload.dose
     medication.is_active = payload.is_active
     _touch(medication)

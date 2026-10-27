@@ -11,12 +11,12 @@ SORT_FIELDS = (
     "dose",
     "drug_type_id",
     "brand_id",
-    "location_id",
+    "cell_id",
     "created_at",
     "is_active",
     "id",
 )
-SORT_PATTERN = r"^-?(?:description|dose|drug_type_id|brand_id|location_id|created_at|is_active|id)$"
+SORT_PATTERN = r"^-?(?:description|dose|drug_type_id|brand_id|cell_id|created_at|is_active|id)$"
 
 _TEXT_FIELDS = ("description", "dose")
 
@@ -41,9 +41,9 @@ class _MedicationBase(BaseModel):
         ge=1,
         description="Identificador de la marca",
     )
-    location_id: int = Field(
+    cell_id: int = Field(
         ge=1,
-        description="Identificador de la ubicación",
+        description="Identificador de la celda",
     )
     dose: str = Field(
         max_length=100,
@@ -88,7 +88,7 @@ class MedicationRead(BaseModel):
     description: str
     drug_type_id: int
     brand_id: int
-    location_id: int
+    cell_id: int
     dose: str
     is_active: bool
 

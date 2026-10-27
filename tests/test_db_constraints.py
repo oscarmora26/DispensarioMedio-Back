@@ -21,11 +21,12 @@ from tests.db_support import (
     assert_integrity_error,
     create_audit_log,
     create_brand,
+    create_cell,
     create_doctor,
     create_drug_type,
-    create_location,
     create_medication,
     create_patient,
+    create_shelf,
     create_user,
     create_visit,
     create_visit_medication,
@@ -431,24 +432,42 @@ async def test_uq_visit_medications_rejects_duplicate_pair(
     assert "uq_visit_medications" in str(exc.orig)
 
 
-async def test_uq_locations_position_rejects_same_position(db_conn: AsyncConnection) -> None:
+async def test_uq_cells_position_rejects_same_position(db_conn: AsyncConnection) -> None:
+    """R-2: `(shelf_id, section, cell)` es único dentro del estante (CITEXT)."""
+    shelf_id = await create_shelf(db_conn)
     await insert_id(
         db_conn,
         """
-        INSERT INTO locations (description, shelf, section, cell)
-        VALUES ('Estante A', 'A', '1', '1')
+        INSERT INTO cells (shelf_id, section, cell)
+        VALUES (:shelf_id, 'A', '1')
         RETURNING id
         """,
+        {"shelf_id": shelf_id},
     )
     exc = await assert_integrity_error(
         db_conn,
         """
-        INSERT INTO locations (description, shelf, section, cell)
-        VALUES ('Estante A bis', 'a', '1', '1')
+        INSERT INTO cells (shelf_id, section, cell)
+        VALUES (:shelf_id, 'a', '1')
         """,
+        {"shelf_id": shelf_id},
     )
 
-    assert "uq_locations_position" in str(exc.orig)
+    assert "uq_cells_position" in str(exc.orig)
+
+    # La misma posición en otro estante está permitida.
+    other_shelf_id = await create_shelf(db_conn)
+    other_cell_id = await insert_id(
+        db_conn,
+        """
+        INSERT INTO cells (shelf_id, section, cell)
+        VALUES (:shelf_id, 'A', '1')
+        RETURNING id
+        """,
+        {"shelf_id": other_shelf_id},
+    )
+
+    assert other_cell_id
 
 
 async def test_uq_medications_identity_rejects_same_description_brand_and_dose(
@@ -456,26 +475,26 @@ async def test_uq_medications_identity_rejects_same_description_brand_and_dose(
 ) -> None:
     drug_type_id = await create_drug_type(db_conn)
     brand_id = await create_brand(db_conn)
-    location_id = await create_location(db_conn)
+    cell_id = await create_cell(db_conn)
     await create_medication(
         db_conn,
         description="Ibuprofeno",
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
         dose="400 mg",
     )
 
     duplicate = await assert_integrity_error(
         db_conn,
         """
-        INSERT INTO medications (description, drug_type_id, brand_id, location_id, dose)
-        VALUES ('IBUPROFENO', :drug_type_id, :brand_id, :location_id, '400 mg')
+        INSERT INTO medications (description, drug_type_id, brand_id, cell_id, dose)
+        VALUES ('IBUPROFENO', :drug_type_id, :brand_id, :cell_id, '400 mg')
         """,
         {
             "drug_type_id": drug_type_id,
             "brand_id": brand_id,
-            "location_id": location_id,
+            "cell_id": cell_id,
         },
     )
     assert "uq_medications_identity" in str(duplicate.orig)
@@ -485,7 +504,7 @@ async def test_uq_medications_identity_rejects_same_description_brand_and_dose(
         description="Ibuprofeno",
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
         dose="600 mg",
     )
     assert other_dose
@@ -710,10 +729,8 @@ async def test_fk_restrict_prevents_deleting_catalogs_with_medications(
 ) -> None:
     drug_type_id = await create_drug_type(db_conn)
     brand_id = await create_brand(db_conn)
-    location_id = await create_location(db_conn)
-    await create_medication(
-        db_conn, drug_type_id=drug_type_id, brand_id=brand_id, location_id=location_id
-    )
+    cell_id = await create_cell(db_conn)
+    await create_medication(db_conn, drug_type_id=drug_type_id, brand_id=brand_id, cell_id=cell_id)
 
     drug_type_exc = await assert_integrity_error(
         db_conn, "DELETE FROM drug_types WHERE id = :id", {"id": drug_type_id}
@@ -721,13 +738,13 @@ async def test_fk_restrict_prevents_deleting_catalogs_with_medications(
     brand_exc = await assert_integrity_error(
         db_conn, "DELETE FROM brands WHERE id = :id", {"id": brand_id}
     )
-    location_exc = await assert_integrity_error(
-        db_conn, "DELETE FROM locations WHERE id = :id", {"id": location_id}
+    cell_exc = await assert_integrity_error(
+        db_conn, "DELETE FROM cells WHERE id = :id", {"id": cell_id}
     )
 
     assert "fk_medications_drug_type_id_drug_types" in str(drug_type_exc.orig)
     assert "fk_medications_brand_id_brands" in str(brand_exc.orig)
-    assert "fk_medications_location_id_locations" in str(location_exc.orig)
+    assert "fk_medications_cell_id_cells" in str(cell_exc.orig)
 
 
 async def test_fk_cascade_deletes_visit_medications_and_keeps_medications(

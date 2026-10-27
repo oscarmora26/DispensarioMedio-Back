@@ -41,12 +41,13 @@ VERSIONS_DIR = ROOT / "alembic" / "versions"
 EXPECTED_TABLES = {
     "audit_log",
     "brands",
+    "cells",
     "doctors",
     "drug_types",
-    "locations",
     "medications",
     "patients",
     "roles",
+    "shelves",
     "users",
     "visit_medications",
     "visits",
@@ -57,12 +58,13 @@ EXPECTED_MODEL_FILES = {
     "mixins.py",
     "audit_log.py",
     "brand.py",
+    "cell.py",
     "doctor.py",
     "drug_type.py",
-    "location.py",
     "medication.py",
     "patient.py",
     "role.py",
+    "shelf.py",
     "user.py",
     "visit.py",
     "visit_medication.py",
@@ -78,7 +80,8 @@ EXPECTED_UQS = {
     "uq_doctors_cedula",
     "uq_drug_types_description",
     "uq_brands_description",
-    "uq_locations_position",
+    "uq_shelves_name",
+    "uq_cells_position",
     "uq_medications_identity",
     "uq_patients_cedula",
     "uq_visit_medications",
@@ -99,9 +102,10 @@ EXPECTED_CKS = {
 EXPECTED_FKS = {
     "fk_users_role_id_roles": ("users", "roles.id", "RESTRICT"),
     "fk_users_doctor_id_doctors": ("users", "doctors.id", "RESTRICT"),
+    "fk_cells_shelf_id_shelves": ("cells", "shelves.id", "CASCADE"),
     "fk_medications_drug_type_id_drug_types": ("medications", "drug_types.id", "RESTRICT"),
     "fk_medications_brand_id_brands": ("medications", "brands.id", "RESTRICT"),
-    "fk_medications_location_id_locations": ("medications", "locations.id", "RESTRICT"),
+    "fk_medications_cell_id_cells": ("medications", "cells.id", "RESTRICT"),
     "fk_visits_doctor_id_doctors": ("visits", "doctors.id", "RESTRICT"),
     "fk_visits_patient_id_patients": ("visits", "patients.id", "RESTRICT"),
     "fk_visits_created_by_users": ("visits", "users.id", "RESTRICT"),
@@ -117,14 +121,21 @@ EXPECTED_FKS = {
 
 EXPECTED_FK_INDEXES = {
     "ix_users_role_id",
+    "ix_cells_shelf_id",
     "ix_medications_drug_type_id",
     "ix_medications_brand_id",
-    "ix_medications_location_id",
+    "ix_medications_cell_id",
     "ix_visit_medications_visit_id",
     "ix_visit_medications_medication_id",
     "ix_visits_created_by",
     "ix_visits_annulled_by",
 }
+
+#: Indices que existen en la base migrada y no son de FK explicitos del modelo.
+EXPECTED_DB_ONLY_INDEXES: set[str] = set()
+
+#: Indices de FK tal como existen en la base migrada.
+EXPECTED_DB_FK_INDEXES = EXPECTED_FK_INDEXES | EXPECTED_DB_ONLY_INDEXES
 
 EXPECTED_VISIT_INDEXES = {
     "ix_visits_doctor_visited",
@@ -155,7 +166,11 @@ EXPECTED_REVISION_ORDER = [
     "audit_schema",
     "seed_roles",
     "unaccent_extension",
+    "shelves_cells_schema",
+    "rename_medications_location_id_to_cell_id",
 ]
+
+EXPECTED_REVISION_COUNT = len(EXPECTED_REVISION_ORDER)
 
 EXPECTED_RELATIONSHIPS = {
     ("Role", "users"): False,
@@ -165,10 +180,12 @@ EXPECTED_RELATIONSHIPS = {
     ("Doctor", "visits"): False,
     ("DrugType", "medications"): False,
     ("Brand", "medications"): False,
-    ("Location", "medications"): False,
+    ("Shelf", "cells"): False,
+    ("Cell", "shelf"): True,
+    ("Cell", "medications"): False,
     ("Medication", "drug_type"): True,
     ("Medication", "brand"): True,
-    ("Medication", "location"): True,
+    ("Medication", "cell"): True,
     ("Medication", "visit_medications"): False,
     ("Patient", "visits"): False,
     ("Visit", "doctor"): True,
@@ -186,7 +203,8 @@ TABLES_WITH_UPDATED_AT = {
     "users",
     "drug_types",
     "brands",
-    "locations",
+    "shelves",
+    "cells",
     "medications",
     "patients",
     "visits",
@@ -222,18 +240,19 @@ def migration_modules() -> dict[str, ModuleType]:
     }
 
 
-def test_ca01_metadata_contains_exactly_the_eleven_domain_tables() -> None:
-    """CA-1: las 11 tablas del dominio, con nombres exactos y sin esquema."""
+def test_ca01_metadata_contains_exactly_the_twelve_domain_tables() -> None:
+    """CA-1: las 12 tablas del dominio, con nombres exactos y sin esquema."""
     assert set(Base.metadata.tables) == EXPECTED_TABLES
     assert sorted(Base.metadata.tables) == [
         "audit_log",
         "brands",
+        "cells",
         "doctors",
         "drug_types",
-        "locations",
         "medications",
         "patients",
         "roles",
+        "shelves",
         "users",
         "visit_medications",
         "visits",
@@ -276,12 +295,13 @@ def test_ca04_models_package_has_expected_files_and_exports() -> None:
     assert set(models.__all__) == {
         "AuditLog",
         "Brand",
+        "Cell",
         "Doctor",
         "DrugType",
-        "Location",
         "Medication",
         "Patient",
         "Role",
+        "Shelf",
         "User",
         "Visit",
         "VisitMedication",
@@ -306,10 +326,11 @@ def test_metadata_column_types_match_the_spec() -> None:
         ("patients", "carnet"),
         ("drug_types", "description"),
         ("brands", "description"),
-        ("locations", "description"),
-        ("locations", "shelf"),
-        ("locations", "section"),
-        ("locations", "cell"),
+        ("shelves", "name"),
+        ("shelves", "description"),
+        ("cells", "section"),
+        ("cells", "cell"),
+        ("cells", "description"),
         ("medications", "description"),
         ("medications", "dose"),
     }
@@ -348,7 +369,8 @@ def test_metadata_column_types_match_the_spec() -> None:
         "users",
         "drug_types",
         "brands",
-        "locations",
+        "shelves",
+        "cells",
         "medications",
         "patients",
     ):
@@ -365,8 +387,10 @@ def test_metadata_column_types_match_the_spec() -> None:
         ("drug_types", "updated_at"),
         ("brands", "created_at"),
         ("brands", "updated_at"),
-        ("locations", "created_at"),
-        ("locations", "updated_at"),
+        ("shelves", "created_at"),
+        ("shelves", "updated_at"),
+        ("cells", "created_at"),
+        ("cells", "updated_at"),
         ("medications", "created_at"),
         ("medications", "updated_at"),
         ("patients", "created_at"),
@@ -387,9 +411,10 @@ def test_metadata_column_types_match_the_spec() -> None:
     bigint_columns = {
         ("users", "role_id"),
         ("users", "doctor_id"),
+        ("cells", "shelf_id"),
         ("medications", "drug_type_id"),
         ("medications", "brand_id"),
-        ("medications", "location_id"),
+        ("medications", "cell_id"),
         ("visits", "doctor_id"),
         ("visits", "patient_id"),
         ("visits", "created_by"),
@@ -451,8 +476,8 @@ def test_metadata_constraint_names_are_exact_and_not_double_prefixed() -> None:
     assert uqs == EXPECTED_UQS
     assert cks == EXPECTED_CKS
     assert fks == set(EXPECTED_FKS)
-    assert len(pks) + len(uqs) + len(cks) + len(fks) == 43
-    assert len(set().union(pks, uqs, cks, fks)) == 43
+    assert len(pks) + len(uqs) + len(cks) + len(fks) == 46
+    assert len(set().union(pks, uqs, cks, fks)) == 46
 
 
 def test_metadata_indexes_have_exact_names_and_options() -> None:
@@ -467,10 +492,11 @@ def test_metadata_indexes_have_exact_names_and_options() -> None:
     }
 
     assert set(indexes) | unique_constraints == EXPECTED_NON_PK_INDEXES
-    assert len(indexes) == 16
-    assert len(unique_constraints) == 11
-    assert len(set(indexes) | unique_constraints) == 27
+    assert len(indexes) == 17
+    assert len(unique_constraints) == 12
+    assert len(set(indexes) | unique_constraints) == 29
     assert "ix_patients_carnet" not in indexes
+    assert "ix_cells_shelf_id" in indexes
 
     carnet = indexes["uq_patients_carnet"]
     assert carnet.unique is True
@@ -494,7 +520,7 @@ def test_metadata_indexes_have_exact_names_and_options() -> None:
 
 
 def test_metadata_fk_delete_rules_match_the_spec() -> None:
-    """Plan #5: 10 RESTRICT, 1 CASCADE y 1 SET NULL."""
+    """Plan #5 y FEAT-017: 10 RESTRICT, 2 CASCADE (`visitas`, `celdas`) y 1 SET NULL."""
     fks = {
         constraint.name: constraint
         for constraint in all_constraints()
@@ -511,7 +537,7 @@ def test_metadata_fk_delete_rules_match_the_spec() -> None:
 
     ondeletes = [next(iter(fk.elements)).ondelete for fk in fks.values()]
     assert ondeletes.count("RESTRICT") == 10
-    assert ondeletes.count("CASCADE") == 1
+    assert ondeletes.count("CASCADE") == 2
     assert ondeletes.count("SET NULL") == 1
 
 
@@ -572,7 +598,8 @@ def test_boolean_columns_are_not_null_with_true_default() -> None:
         "users",
         "drug_types",
         "brands",
-        "locations",
+        "shelves",
+        "cells",
         "medications",
         "patients",
     ):
@@ -606,9 +633,9 @@ def test_seed_sql_is_idempotent_by_construction() -> None:
 
 
 def test_ca06_migration_set_is_a_single_linear_chain() -> None:
-    """CA-6: 6 revisiones, una sola cabeza y el orden de la spec."""
+    """CA-6: nueve revisiones, una sola cabeza y el orden de la spec."""
     modules = migration_modules()
-    assert len(modules) == 7
+    assert len(modules) == EXPECTED_REVISION_COUNT
 
     bases = [module for module in modules.values() if module.down_revision is None]
     assert len(bases) == 1
@@ -633,7 +660,7 @@ def test_ca06_migration_set_is_a_single_linear_chain() -> None:
     assert messages == EXPECTED_REVISION_ORDER
 
     files = sorted(VERSIONS_DIR.glob("*.py"))
-    assert len(files) == 7
+    assert len(files) == EXPECTED_REVISION_COUNT
     messages_by_file = []
     for path in files:
         source = path.read_text(encoding="utf-8")
@@ -647,7 +674,9 @@ def test_ca06_migration_set_is_a_single_linear_chain() -> None:
 
         module = load_migration(path)
         message = (module.__doc__ or "").strip().splitlines()[0]
-        assert path.stem.endswith(message), path.name
+        # Alembic trunca el slug al nombrar el archivo: se compara el prefijo.
+        slug = path.stem.split("_", 1)[1].rstrip("_")
+        assert message.startswith(slug), path.name
         messages_by_file.append(message)
 
     assert set(messages_by_file) == set(EXPECTED_REVISION_ORDER)

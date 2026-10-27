@@ -7,6 +7,7 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 logger = structlog.get_logger(__name__)
 
@@ -139,4 +140,46 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=422,
             content={"detail": "Datos inválidos", "code": "validation_error", "errors": errors},
+        )
+
+    @app.exception_handler(IntegrityError)
+    async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+        """Traduce una violacion de integridad a un envelope JSON estable.
+
+        Nunca se expone el mensaje del motor: puede incluir nombres de
+        constraints, valores de columnas o datos personales. El detalle queda
+        en el log de servidor, asociado al `request_id` de la respuesta.
+        """
+        logger.error(
+            "integrity_error",
+            method=request.method,
+            path=request.url.path,
+            sqlstate=getattr(getattr(exc, "orig", None), "sqlstate", None),
+            constraint=getattr(getattr(exc, "orig", None), "constraint_name", None),
+        )
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": "La operación entra en conflicto con el estado actual de los datos",
+                "code": "integrity_error",
+                "errors": [],
+            },
+        )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        """Ultimo recurso: responde el envelope de error en vez de un traceback."""
+        logger.exception(
+            "unhandled_error",
+            method=request.method,
+            path=request.url.path,
+            error_type=type(exc).__name__,
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": "Error interno del servidor",
+                "code": "internal_error",
+                "errors": [],
+            },
         )

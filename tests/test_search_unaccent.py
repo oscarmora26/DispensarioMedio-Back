@@ -9,9 +9,9 @@ from tests import (
     brands_support,
     doctors_support,
     drug_types_support,
-    locations_support,
     medications_support,
     patients_support,
+    shelves_support,
     users_support,
 )
 from tests.auth_support import create_auth_user
@@ -57,17 +57,25 @@ async def test_ca02_brands_search_ignores_accents(
     assert body["items"][0]["id"] == brand_id
 
 
-async def test_ca03_locations_search_ignores_accents(
+async def test_ca03_shelves_search_ignores_accents(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
-    """CA-3: `deposito` encuentra `Depósito`."""
-    _, headers = await locations_support.admin_actor(db_conn)
+    """CA-3: `deposito` encuentra `Depósito` en el nombre y en la descripción."""
+    _, headers = await shelves_support.admin_actor(db_conn)
     tag = unique_suffix()
-    location_id = await locations_support.create_location_row(db_conn, f"Depósito {tag}")
+    shelf_id, _ = await shelves_support.create_shelf_with_cells(
+        db_conn, tag=tag, name=f"Depósito {tag}", description=f"Área {tag}"
+    )
 
-    body = await _search(auth_client, headers, locations_support.LOCATIONS_PATH, f"deposito {tag}")
+    body = await _search(auth_client, headers, shelves_support.SHELVES_PATH, f"deposito {tag}")
     assert body["total"] == 1
-    assert body["items"][0]["id"] == location_id
+    assert body["items"][0]["id"] == shelf_id
+
+    description_body = await _search(
+        auth_client, headers, shelves_support.SHELVES_PATH, f"area {tag}"
+    )
+    assert description_body["total"] == 1
+    assert description_body["items"][0]["id"] == shelf_id
 
 
 async def test_ca04_medications_search_ignores_accents(

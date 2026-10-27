@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from tests.db_support import fetch_all, fetch_scalar
 from tests.test_models_metadata import (
     EXPECTED_CKS,
-    EXPECTED_FK_INDEXES,
+    EXPECTED_DB_FK_INDEXES,
     EXPECTED_FKS,
     EXPECTED_PKS,
     EXPECTED_TABLES,
@@ -29,8 +29,8 @@ SEED_MODULE = load_migration(VERSIONS_DIR / "42de9c3ddd3a_seed_roles.py")
 EXPECTED_UNIQUE_INDEXES = EXPECTED_UQS | {"uq_patients_carnet"}
 
 
-async def test_ca07_twelve_physical_tables_in_public_schema(db_conn: AsyncConnection) -> None:
-    """CA-7: 11 tablas de dominio + `alembic_version`."""
+async def test_ca07_thirteen_physical_tables_in_public_schema(db_conn: AsyncConnection) -> None:
+    """CA-7: 12 tablas de dominio + `alembic_version`."""
     count = await fetch_scalar(
         db_conn,
         """
@@ -39,7 +39,7 @@ async def test_ca07_twelve_physical_tables_in_public_schema(db_conn: AsyncConnec
         """,
     )
 
-    assert count == 12
+    assert count == 13
 
 
 async def test_ca08_only_citext_and_pg_trgm_extensions(db_conn: AsyncConnection) -> None:
@@ -65,7 +65,7 @@ async def test_ca08_only_citext_and_pg_trgm_extensions(db_conn: AsyncConnection)
 
 
 async def test_ca09_constraint_counts_by_type(db_conn: AsyncConnection) -> None:
-    """CA-9: 9 CHECK, 12 FK, 11 PK y 11 UNIQUE (43 en total)."""
+    """CA-9: 9 CHECK, 13 FK, 12 PK y 12 UNIQUE (46 en total)."""
     rows = await fetch_all(
         db_conn,
         """
@@ -77,14 +77,14 @@ async def test_ca09_constraint_counts_by_type(db_conn: AsyncConnection) -> None:
         """,
     )
 
-    assert {row[0]: row[1] for row in rows} == {"c": 9, "f": 12, "p": 11, "u": 11}
-    assert sum(row[1] for row in rows) == 43
+    assert {row[0]: row[1] for row in rows} == {"c": 9, "f": 13, "p": 12, "u": 12}
+    assert sum(row[1] for row in rows) == 46
 
 
 async def test_ca10_foreign_keys_names_references_and_delete_actions(
     db_conn: AsyncConnection,
 ) -> None:
-    """CA-10: 12 FK con nombre exacto; `r` RESTRICT, `c` CASCADE, `n` SET NULL."""
+    """CA-10: 13 FK con nombre exacto; `r` RESTRICT, `c` CASCADE, `n` SET NULL."""
     rows = await fetch_all(
         db_conn,
         """
@@ -95,7 +95,7 @@ async def test_ca10_foreign_keys_names_references_and_delete_actions(
         """,
     )
 
-    assert len(rows) == 12
+    assert len(rows) == 13
     found = {name: (delete_action, target) for name, delete_action, target in rows}
     expected = {
         name: ({"RESTRICT": "r", "CASCADE": "c", "SET NULL": "n"}[ondelete], target.split(".")[0])
@@ -120,7 +120,7 @@ async def test_ca11_check_constraint_names(db_conn: AsyncConnection) -> None:
 
 
 async def test_ca12_index_count_and_groups(db_conn: AsyncConnection) -> None:
-    """CA-12: 38 indices repartidos en PK, UQ, FK, visitas y trigram."""
+    """CA-12: 41 indices repartidos en PK, UQ, FK, visitas y trigram."""
     rows = await fetch_all(
         db_conn,
         """
@@ -131,18 +131,18 @@ async def test_ca12_index_count_and_groups(db_conn: AsyncConnection) -> None:
     )
     names = {row[0] for row in rows}
 
-    assert len(names) == 38
+    assert len(names) == 41
     assert {name for name in names if name.startswith("pk_")} == EXPECTED_PKS
     assert (names & EXPECTED_UNIQUE_INDEXES) == EXPECTED_UNIQUE_INDEXES
-    assert len(names & EXPECTED_UNIQUE_INDEXES) == 12
-    assert (names & EXPECTED_FK_INDEXES) == EXPECTED_FK_INDEXES
+    assert len(names & EXPECTED_UNIQUE_INDEXES) == 13
+    assert (names & EXPECTED_DB_FK_INDEXES) == EXPECTED_DB_FK_INDEXES
     assert (names & EXPECTED_VISIT_INDEXES) == EXPECTED_VISIT_INDEXES
     assert (names & EXPECTED_TRGM_INDEXES) == EXPECTED_TRGM_INDEXES
 
     grouped = (
         EXPECTED_PKS
         | EXPECTED_UNIQUE_INDEXES
-        | EXPECTED_FK_INDEXES
+        | EXPECTED_DB_FK_INDEXES
         | EXPECTED_VISIT_INDEXES
         | EXPECTED_TRGM_INDEXES
     )
@@ -237,7 +237,7 @@ async def test_ca14_critical_column_types_and_defaults(db_conn: AsyncConnection)
             ('visit_medications', 'quantity'), ('audit_log', 'old_data'),
             ('audit_log', 'new_data'), ('audit_log', 'ip'), ('audit_log', 'action'),
             ('doctors', 'cedula'), ('medications', 'description'),
-            ('locations', 'shelf')
+            ('cells', 'section')
           )
         ORDER BY table_name, column_name
         """,
@@ -271,7 +271,7 @@ async def test_ca14_critical_column_types_and_defaults(db_conn: AsyncConnection)
         ("users", "email"),
         ("patients", "carnet"),
         ("medications", "description"),
-        ("locations", "shelf"),
+        ("cells", "section"),
     ):
         assert columns[key]["udt_name"] == "citext", key
         assert columns[key]["data_type"] == "USER-DEFINED", key
@@ -325,14 +325,14 @@ async def test_ca14_boolean_columns_default_true(db_conn: AsyncConnection) -> No
         """,
     )
 
-    assert len(rows) == 7
+    assert len(rows) == 8
     for table_name, default, is_nullable in rows:
         assert default == "true", table_name
         assert is_nullable == "NO", table_name
 
 
 async def test_ca15_primary_keys_are_identity_by_default(db_conn: AsyncConnection) -> None:
-    """CA-15: las 11 PK son `BIGINT GENERATED BY DEFAULT AS IDENTITY`."""
+    """CA-15: las 12 PK son `BIGINT GENERATED BY DEFAULT AS IDENTITY`."""
     rows = await fetch_all(
         db_conn,
         """
@@ -343,7 +343,7 @@ async def test_ca15_primary_keys_are_identity_by_default(db_conn: AsyncConnectio
         """,
     )
 
-    assert len(rows) == 11
+    assert len(rows) == 12
     assert {table_name for table_name, _, _ in rows} == EXPECTED_TABLES
     for table_name, is_identity, generation in rows:
         assert is_identity == "YES", table_name
@@ -397,7 +397,7 @@ async def test_roles_and_visit_medications_have_no_updated_at(db_conn: AsyncConn
     tables = {row[0] for row in rows}
     assert "roles" not in tables
     assert "visit_medications" not in tables
-    assert len(tables) == 8
+    assert len(tables) == 9
 
 
 async def test_no_triggers_are_created_in_v1(db_conn: AsyncConnection) -> None:

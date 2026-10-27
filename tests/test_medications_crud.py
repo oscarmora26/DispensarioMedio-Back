@@ -35,7 +35,7 @@ async def test_ca11_create_defaults_to_active_and_honors_explicit_inactive(
 ) -> None:
     """CA-11: `POST` sin `is_active` nace activo; con `false` nace inactivo."""
     _, headers = await admin_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
     tag = unique_suffix()
 
     created = await auth_client.post(
@@ -45,7 +45,7 @@ async def test_ca11_create_defaults_to_active_and_honors_explicit_inactive(
             "description": f"Acetaminofén {tag}",
             "drug_type_id": drug_type_id,
             "brand_id": brand_id,
-            "location_id": location_id,
+            "cell_id": cell_id,
             "dose": "500 mg",
         },
     )
@@ -66,7 +66,7 @@ async def test_ca11_create_defaults_to_active_and_honors_explicit_inactive(
     inactive = await auth_client.post(
         MEDICATIONS_PATH,
         headers=headers,
-        json=medication_body(unique_suffix(), drug_type_id, brand_id, location_id, is_active=False),
+        json=medication_body(unique_suffix(), drug_type_id, brand_id, cell_id, is_active=False),
     )
     assert inactive.status_code == 201, inactive.text
     assert inactive.json()["is_active"] is False
@@ -81,7 +81,7 @@ async def test_ca12_composite_duplicates_collide_case_insensitively_including_sp
 ) -> None:
     """CA-12: la identidad repetida (otra caja o espacios) ⇒ 409; otra marca/dosis ⇒ 201."""
     _, headers = await admin_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
     other_brand = await create_brand_for_test(db_conn)
     tag = unique_suffix()
     description = f"Acetaminofén {tag}"
@@ -91,7 +91,7 @@ async def test_ca12_composite_duplicates_collide_case_insensitively_including_sp
         MEDICATIONS_PATH,
         headers=headers,
         json=medication_body(
-            tag, drug_type_id, brand_id, location_id, description=description, dose=dose
+            tag, drug_type_id, brand_id, cell_id, description=description, dose=dose
         ),
     )
     assert first.status_code == 201, first.text
@@ -109,7 +109,7 @@ async def test_ca12_composite_duplicates_collide_case_insensitively_including_sp
                 unique_suffix(),
                 drug_type_id,
                 brand_id,
-                location_id,
+                cell_id,
                 description=variant["description"],
                 dose=variant["dose"],
             ),
@@ -124,7 +124,7 @@ async def test_ca12_composite_duplicates_collide_case_insensitively_including_sp
         MEDICATIONS_PATH,
         headers=headers,
         json=medication_body(
-            tag, drug_type_id, other_brand, location_id, description=description, dose=dose
+            tag, drug_type_id, other_brand, cell_id, description=description, dose=dose
         ),
     )
     assert other_brand_ok.status_code == 201, other_brand_ok.text
@@ -136,7 +136,7 @@ async def test_ca12_composite_duplicates_collide_case_insensitively_including_sp
             tag,
             drug_type_id,
             brand_id,
-            location_id,
+            cell_id,
             description=description,
             dose=f"750 mg {tag}",
         ),
@@ -149,19 +149,19 @@ async def test_ca13_create_validations_and_strip_normalization(
 ) -> None:
     """CA-13: 422 con `field` del campo; 1 y 100 caracteres pasan; `strip` recorta."""
     _, headers = await admin_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
     tag = unique_suffix()
-    base = medication_body(tag, drug_type_id, brand_id, location_id)
+    base = medication_body(tag, drug_type_id, brand_id, cell_id)
 
     assert error_fields(await auth_client.post(MEDICATIONS_PATH, headers=headers, json={})) == {
         "description",
         "drug_type_id",
         "brand_id",
-        "location_id",
+        "cell_id",
         "dose",
     }
 
-    for field in ("description", "drug_type_id", "brand_id", "location_id", "dose"):
+    for field in ("description", "drug_type_id", "brand_id", "cell_id", "dose"):
         payload = dict(base)
         del payload[field]
         response = await auth_client.post(MEDICATIONS_PATH, headers=headers, json=payload)
@@ -179,7 +179,7 @@ async def test_ca13_create_validations_and_strip_normalization(
         )
         assert error_fields(too_long) == {field}
 
-    for field in ("drug_type_id", "brand_id", "location_id"):
+    for field in ("drug_type_id", "brand_id", "cell_id"):
         for invalid in (0, -1, "abc"):
             response = await auth_client.post(
                 MEDICATIONS_PATH, headers=headers, json={**base, field: invalid}
@@ -191,7 +191,7 @@ async def test_ca13_create_validations_and_strip_normalization(
             MEDICATIONS_PATH,
             headers=headers,
             json={
-                **medication_body(unique_suffix(), drug_type_id, brand_id, location_id),
+                **medication_body(unique_suffix(), drug_type_id, brand_id, cell_id),
                 field: "Q",
             },
         )
@@ -208,7 +208,7 @@ async def test_ca13_create_validations_and_strip_normalization(
             MEDICATIONS_PATH,
             headers=headers,
             json={
-                **medication_body(hundred_tag, drug_type_id, brand_id, location_id),
+                **medication_body(hundred_tag, drug_type_id, brand_id, cell_id),
                 field: hundred,
             },
         )
@@ -233,11 +233,11 @@ async def test_ca14_missing_catalogs_return_their_own_404_in_order(
 ) -> None:
     """CA-14: FK sin fila ⇒ 404 del catálogo; varios ⇒ `drug_type` primero."""
     _, headers = await admin_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
     tag = unique_suffix()
     missing_drug = await nonexistent_catalog_id(db_conn, "drug_types")
     missing_brand = await nonexistent_catalog_id(db_conn, "brands")
-    missing_location = await nonexistent_catalog_id(db_conn, "locations")
+    missing_cell = await nonexistent_catalog_id(db_conn, "cells")
     before = await count_medications(db_conn)
 
     cases = [
@@ -249,21 +249,21 @@ async def test_ca14_missing_catalogs_return_their_own_404_in_order(
         ),
         ({"brand_id": missing_brand}, 404, "brand_not_found", "La marca no existe"),
         (
-            {"location_id": missing_location},
+            {"cell_id": missing_cell},
             404,
-            "location_not_found",
-            "La ubicación no existe",
+            "cell_not_found",
+            "La celda no existe",
         ),
     ]
     for override, status, code, detail in cases:
-        payload = medication_body(tag + unique_suffix(), drug_type_id, brand_id, location_id)
+        payload = medication_body(tag + unique_suffix(), drug_type_id, brand_id, cell_id)
         payload.update(override)
         response = await auth_client.post(MEDICATIONS_PATH, headers=headers, json=payload)
         body = assert_error_envelope(response, status, code)
         assert body["detail"] == detail
         assert body["errors"] == []
 
-    all_missing = medication_body(unique_suffix(), missing_drug, missing_brand, missing_location)
+    all_missing = medication_body(unique_suffix(), missing_drug, missing_brand, missing_cell)
     body = assert_error_envelope(
         await auth_client.post(MEDICATIONS_PATH, headers=headers, json=all_missing),
         404,
@@ -278,7 +278,7 @@ async def test_ca15_inactive_catalogs_return_422_with_field_and_404_wins(
 ) -> None:
     """CA-15: FK inactivo ⇒ 422 con `field`; inexistente precede a inactivo."""
     _, headers = await admin_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
     missing_drug = await nonexistent_catalog_id(db_conn, "drug_types")
     before = await count_medications(db_conn)
 
@@ -288,7 +288,7 @@ async def test_ca15_inactive_catalogs_return_422_with_field_and_404_wins(
     response = await auth_client.post(
         MEDICATIONS_PATH,
         headers=headers,
-        json=medication_body(unique_suffix(), drug_type_id, brand_id, location_id),
+        json=medication_body(unique_suffix(), drug_type_id, brand_id, cell_id),
     )
     assert response.status_code == 422, response.text
     body = response.json()
@@ -306,7 +306,7 @@ async def test_ca15_inactive_catalogs_return_422_with_field_and_404_wins(
     brand_response = await auth_client.post(
         MEDICATIONS_PATH,
         headers=headers,
-        json=medication_body(unique_suffix(), drug_type_id, brand_id, location_id),
+        json=medication_body(unique_suffix(), drug_type_id, brand_id, cell_id),
     )
     assert brand_response.status_code == 422, brand_response.text
     assert brand_response.json()["errors"] == [
@@ -317,20 +317,18 @@ async def test_ca15_inactive_catalogs_return_422_with_field_and_404_wins(
     )
 
     await db_conn.execute(
-        text("UPDATE locations SET is_active = false WHERE id = :id"), {"id": location_id}
+        text("UPDATE cells SET is_active = false WHERE id = :id"), {"id": cell_id}
     )
-    location_response = await auth_client.post(
+    cell_response = await auth_client.post(
         MEDICATIONS_PATH,
         headers=headers,
-        json=medication_body(unique_suffix(), drug_type_id, brand_id, location_id),
+        json=medication_body(unique_suffix(), drug_type_id, brand_id, cell_id),
     )
-    assert location_response.status_code == 422, location_response.text
-    assert location_response.json()["errors"] == [
-        {"field": "location_id", "message": "La ubicación está inactiva"}
+    assert cell_response.status_code == 422, cell_response.text
+    assert cell_response.json()["errors"] == [
+        {"field": "cell_id", "message": "La celda está inactiva"}
     ]
-    await db_conn.execute(
-        text("UPDATE locations SET is_active = true WHERE id = :id"), {"id": location_id}
-    )
+    await db_conn.execute(text("UPDATE cells SET is_active = true WHERE id = :id"), {"id": cell_id})
 
     await db_conn.execute(
         text("UPDATE brands SET is_active = false WHERE id = :id"), {"id": brand_id}
@@ -338,14 +336,14 @@ async def test_ca15_inactive_catalogs_return_422_with_field_and_404_wins(
     precedence = await auth_client.post(
         MEDICATIONS_PATH,
         headers=headers,
-        json=medication_body(unique_suffix(), missing_drug, brand_id, location_id),
+        json=medication_body(unique_suffix(), missing_drug, brand_id, cell_id),
     )
     assert_error_envelope(precedence, 404, "drug_type_not_found")
 
     inactive_self = await auth_client.post(
         MEDICATIONS_PATH,
         headers=headers,
-        json=medication_body(unique_suffix(), drug_type_id, brand_id, location_id, is_active=False),
+        json=medication_body(unique_suffix(), drug_type_id, brand_id, cell_id, is_active=False),
     )
     assert inactive_self.status_code == 422, inactive_self.text
     assert inactive_self.json()["errors"] == [
@@ -364,13 +362,13 @@ async def test_ca16_create_response_hides_timestamps_and_logs_creation(
 ) -> None:
     """CA-16: el 201 no expone fechas ni anidados y emite `medication.created`."""
     actor_id, headers = await admin_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
     caplog.set_level(logging.INFO)
 
     response = await auth_client.post(
         MEDICATIONS_PATH,
         headers=headers,
-        json=medication_body(unique_suffix(), drug_type_id, brand_id, location_id),
+        json=medication_body(unique_suffix(), drug_type_id, brand_id, cell_id),
     )
     assert response.status_code == 201, response.text
     body = response.json()
@@ -393,14 +391,14 @@ async def test_ca17_detail_matches_list_and_medico_sees_the_same(
     """CA-17: detalle 200 igual al listado, inactivos visibles, 422 de path y lectura MEDICO."""
     _, admin_headers = await admin_actor(db_conn)
     _, medico_headers = await medico_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
     tag = unique_suffix()
     active_id = await create_medication_row(
         db_conn,
         f"Detalle {tag}",
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
         is_active=True,
     )
     inactive_id = await create_medication_row(
@@ -408,7 +406,7 @@ async def test_ca17_detail_matches_list_and_medico_sees_the_same(
         f"Detalle Inactiva {tag}",
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
         is_active=False,
     )
 
@@ -441,15 +439,15 @@ async def test_ca18_put_replaces_and_preserves_created_at(
 ) -> None:
     """CA-18: `PUT` cambia los campos, conserva `created_at` y refresca `updated_at`."""
     _, headers = await admin_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
-    other_location = await create_location_for_test(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
+    other_cell = await create_cell_for_test(db_conn)
     tag = unique_suffix()
     medication_id = await create_medication_row(
         db_conn,
         f"Vieja {tag}",
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
         dose=f"500 mg {tag}",
     )
     before = await fetch_medication_row(db_conn, medication_id)
@@ -462,7 +460,7 @@ async def test_ca18_put_replaces_and_preserves_created_at(
             "description": f"Nueva {tag}",
             "drug_type_id": drug_type_id,
             "brand_id": brand_id,
-            "location_id": other_location,
+            "cell_id": other_cell,
             "dose": f"750 mg {tag}",
             "is_active": True,
         },
@@ -471,14 +469,14 @@ async def test_ca18_put_replaces_and_preserves_created_at(
     body = response.json()
     assert set(body) == ITEM_KEYS
     assert body["description"] == f"Nueva {tag}"
-    assert body["location_id"] == other_location
+    assert body["cell_id"] == other_cell
     assert body["dose"] == f"750 mg {tag}"
 
     after = await fetch_medication_row(db_conn, medication_id)
     assert after is not None
     assert after["description"] == f"Nueva {tag}"
     assert after["dose"] == f"750 mg {tag}"
-    assert after["location_id"] == other_location
+    assert after["cell_id"] == other_cell
     assert after["created_at"] == before["created_at"]
     assert after["updated_at"] is not None
     assert before["updated_at"] is not None
@@ -490,15 +488,15 @@ async def test_ca19_put_reactivates_deactivates_and_changes_fks(
 ) -> None:
     """CA-19: `PUT` reactiva/desactiva y cambia FK (activos ⇒ 200, resto ⇒ error)."""
     _, headers = await admin_actor(db_conn)
-    drug_a, brand_a, loc_a = await make_catalogs(db_conn, suffix=unique_suffix())
-    drug_b, brand_b, loc_b = await make_catalogs(db_conn, suffix=unique_suffix())
+    drug_a, brand_a, cell_a = await make_catalogs(db_conn, suffix=unique_suffix())
+    drug_b, brand_b, cell_b = await make_catalogs(db_conn, suffix=unique_suffix())
     tag = unique_suffix()
     inactive_id = await create_medication_row(
         db_conn,
         f"Baja {tag}",
         drug_type_id=drug_a,
         brand_id=brand_a,
-        location_id=loc_a,
+        cell_id=cell_a,
         dose=f"500 mg {tag}",
         is_active=False,
     )
@@ -507,7 +505,7 @@ async def test_ca19_put_reactivates_deactivates_and_changes_fks(
         f"Alta {tag}",
         drug_type_id=drug_a,
         brand_id=brand_a,
-        location_id=loc_a,
+        cell_id=cell_a,
         dose=f"501 mg {tag}",
         is_active=True,
     )
@@ -521,7 +519,7 @@ async def test_ca19_put_reactivates_deactivates_and_changes_fks(
             "description": f"Alta {tag}",
             "drug_type_id": drug_b,
             "brand_id": brand_b,
-            "location_id": loc_b,
+            "cell_id": cell_b,
             "dose": f"501 mg {tag}",
             "is_active": True,
         },
@@ -536,7 +534,7 @@ async def test_ca19_put_reactivates_deactivates_and_changes_fks(
             "description": str(inactive_row["description"]),
             "drug_type_id": drug_a,
             "brand_id": brand_a,
-            "location_id": loc_a,
+            "cell_id": cell_a,
             "dose": str(inactive_row["dose"]),
             "is_active": True,
         },
@@ -553,7 +551,7 @@ async def test_ca19_put_reactivates_deactivates_and_changes_fks(
             "description": str(moved_row["description"]),
             "drug_type_id": int(moved_row["drug_type_id"]),
             "brand_id": int(moved_row["brand_id"]),
-            "location_id": int(moved_row["location_id"]),
+            "cell_id": int(moved_row["cell_id"]),
             "dose": str(moved_row["dose"]),
             "is_active": False,
         },
@@ -569,16 +567,14 @@ async def test_ca19_put_reactivates_deactivates_and_changes_fks(
             "description": f"Alta {tag}",
             "drug_type_id": drug_a,
             "brand_id": missing_fk,
-            "location_id": loc_a,
+            "cell_id": cell_a,
             "dose": f"501 mg {tag}",
             "is_active": True,
         },
     )
     assert_error_envelope(bad_fk, 404, "brand_not_found")
 
-    await db_conn.execute(
-        text("UPDATE locations SET is_active = false WHERE id = :id"), {"id": loc_a}
-    )
+    await db_conn.execute(text("UPDATE cells SET is_active = false WHERE id = :id"), {"id": cell_a})
     inactive_fk = await auth_client.put(
         medication_path(active_id),
         headers=headers,
@@ -586,14 +582,14 @@ async def test_ca19_put_reactivates_deactivates_and_changes_fks(
             "description": f"Alta {tag}",
             "drug_type_id": drug_a,
             "brand_id": brand_a,
-            "location_id": loc_a,
+            "cell_id": cell_a,
             "dose": f"501 mg {tag}",
             "is_active": True,
         },
     )
     assert inactive_fk.status_code == 422, inactive_fk.text
     assert inactive_fk.json()["errors"] == [
-        {"field": "location_id", "message": "La ubicación está inactiva"}
+        {"field": "cell_id", "message": "La celda está inactiva"}
     ]
 
 
@@ -602,7 +598,7 @@ async def test_ca20_put_distinguishes_foreign_from_own_identity(
 ) -> None:
     """CA-20: la identidad ajena colisiona; la propia (otra caja/espacios) pasa."""
     _, headers = await admin_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
     tag = unique_suffix()
     first_desc, first_dose = f"Primera {tag}", f"100 mg {tag}"
     second_desc, second_dose = f"Segunda {tag}", f"200 mg {tag}"
@@ -611,7 +607,7 @@ async def test_ca20_put_distinguishes_foreign_from_own_identity(
         first_desc,
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
         dose=first_dose,
     )
     second_id = await create_medication_row(
@@ -619,7 +615,7 @@ async def test_ca20_put_distinguishes_foreign_from_own_identity(
         second_desc,
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
         dose=second_dose,
     )
     second_before = await fetch_medication_row(db_conn, second_id)
@@ -632,7 +628,7 @@ async def test_ca20_put_distinguishes_foreign_from_own_identity(
             "description": first_desc.upper(),
             "drug_type_id": drug_type_id,
             "brand_id": brand_id,
-            "location_id": location_id,
+            "cell_id": cell_id,
             "dose": first_dose.upper(),
             "is_active": True,
         },
@@ -655,7 +651,7 @@ async def test_ca20_put_distinguishes_foreign_from_own_identity(
                 "description": own_desc,
                 "drug_type_id": drug_type_id,
                 "brand_id": brand_id,
-                "location_id": location_id,
+                "cell_id": cell_id,
                 "dose": own_dose,
                 "is_active": True,
             },
@@ -669,7 +665,7 @@ async def test_ca20_put_distinguishes_foreign_from_own_identity(
             "description": first_desc,
             "drug_type_id": drug_type_id,
             "brand_id": brand_id,
-            "location_id": location_id,
+            "cell_id": cell_id,
             "dose": first_dose,
             "is_active": False,
         },
@@ -683,14 +679,14 @@ async def test_ca21_put_validates_body_path_precedence_and_role(
     """CA-21: 404 inexistente, 422 de reemplazo parcial, precedencia y 403 de MEDICO."""
     _, admin_headers = await admin_actor(db_conn)
     _, medico_headers = await medico_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
     tag = unique_suffix()
     medication_id = await create_medication_row(
         db_conn,
         f"Fija {tag}",
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
         dose=f"500 mg {tag}",
     )
     target = await fetch_medication_row(db_conn, medication_id)
@@ -700,7 +696,7 @@ async def test_ca21_put_validates_body_path_precedence_and_role(
     not_found = await auth_client.put(
         medication_path(missing_id),
         headers=admin_headers,
-        json=medication_body(unique_suffix(), drug_type_id, brand_id, location_id),
+        json=medication_body(unique_suffix(), drug_type_id, brand_id, cell_id),
     )
     assert_error_envelope(not_found, 404, "medication_not_found")
 
@@ -711,7 +707,7 @@ async def test_ca21_put_validates_body_path_precedence_and_role(
             "description": str(target["description"]),
             "drug_type_id": int(target["drug_type_id"]),
             "brand_id": int(target["brand_id"]),
-            "location_id": int(target["location_id"]),
+            "cell_id": int(target["cell_id"]),
             "dose": str(target["dose"]),
             "is_active": True,
         },
@@ -725,8 +721,8 @@ async def test_ca21_put_validates_body_path_precedence_and_role(
     )
     assert_error_envelope(medico_bad_body, 403, "forbidden")
 
-    full = medication_body(unique_suffix(), drug_type_id, brand_id, location_id)
-    for field in ("description", "drug_type_id", "brand_id", "location_id", "dose", "is_active"):
+    full = medication_body(unique_suffix(), drug_type_id, brand_id, cell_id)
+    for field in ("description", "drug_type_id", "brand_id", "cell_id", "dose", "is_active"):
         partial = {k: v for k, v in full.items() if k != field}
         response = await auth_client.put(
             medication_path(medication_id), headers=admin_headers, json=partial
@@ -736,7 +732,7 @@ async def test_ca21_put_validates_body_path_precedence_and_role(
     medico_response = await auth_client.put(
         medication_path(medication_id),
         headers=medico_headers,
-        json=medication_body(unique_suffix(), drug_type_id, brand_id, location_id),
+        json=medication_body(unique_suffix(), drug_type_id, brand_id, cell_id),
     )
     forbidden = assert_error_envelope(medico_response, 403, "forbidden")
     assert forbidden["errors"] == []
@@ -862,11 +858,11 @@ async def create_brand_for_test(conn: AsyncConnection) -> int:
     return await _create_brand(conn, f"Otra Marca {unique_suffix()}")
 
 
-async def create_location_for_test(conn: AsyncConnection) -> int:
-    """Crea una ubicación extra para las pruebas de `PUT`."""
-    from tests.db_support import create_location as _create_location
+async def create_cell_for_test(conn: AsyncConnection) -> int:
+    """Crea una celda extra (con su estante) para las pruebas de `PUT`."""
+    from tests.db_support import create_cell as _create_cell
 
-    return await _create_location(conn, f"Otra Ubicación {unique_suffix()}")
+    return await _create_cell(conn, description=f"Otra Celda {unique_suffix()}")
 
 
 async def create_visit_for_test(conn: AsyncConnection) -> int:

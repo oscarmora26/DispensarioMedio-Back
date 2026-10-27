@@ -85,7 +85,7 @@ async def test_ca06_sort_catalog_direction_tiebreak_and_invalids(
 ) -> None:
     """CA-6: los ocho campos en ambos sentidos, desempate e inválidos."""
     _, headers = await admin_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
     tag = unique_suffix()
     prefix = f"zm{tag}"
     letters = "abcde"
@@ -96,7 +96,7 @@ async def test_ca06_sort_catalog_direction_tiebreak_and_invalids(
             f"{prefix}{letter}",
             drug_type_id=drug_type_id,
             brand_id=brand_id,
-            location_id=location_id,
+            cell_id=cell_id,
             dose=f"{letter}-dose-{tag}",
             is_active=is_active,
         )
@@ -111,7 +111,7 @@ async def test_ca06_sort_catalog_direction_tiebreak_and_invalids(
     desc = await _list(auth_client, headers, search=prefix, sort="-description", size=100)
     assert only(desc, "description") == sorted(only(desc, "description"), reverse=True)
 
-    for field in ("dose", "drug_type_id", "brand_id", "location_id"):
+    for field in ("dose", "drug_type_id", "brand_id", "cell_id"):
         ordered = await _list(auth_client, headers, search=prefix, sort=field, size=100)
         assert only(ordered, field) == sorted(only(ordered, field)), field
         ordered_desc = await _list(auth_client, headers, search=prefix, sort=f"-{field}", size=100)
@@ -168,14 +168,14 @@ async def test_ca07_search_covers_description_and_dose_escapes_wildcards(
 ) -> None:
     """CA-7: `search` parcial y case-insensitive en `description` o `dose`, comodines literales."""
     _, headers = await admin_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
     tag = unique_suffix()
     target_id = await create_medication_row(
         db_conn,
         f"Jarabe Central {tag}",
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
         dose=f"Dosis {tag}",
     )
 
@@ -190,7 +190,7 @@ async def test_ca07_search_covers_description_and_dose_escapes_wildcards(
         f"Otra {tag}",
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
         dose=f"750 mg {tag}",
     )
     dose_only = await _list(auth_client, headers, search=f"750 mg {tag}")
@@ -203,7 +203,7 @@ async def test_ca07_search_covers_description_and_dose_escapes_wildcards(
         f"Med %50 {percent_tag}",
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
         dose=f"% x {percent_tag}",
     )
     control_id = await create_medication_row(
@@ -211,7 +211,7 @@ async def test_ca07_search_covers_description_and_dose_escapes_wildcards(
         f"Med 50 {percent_tag}",
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
         dose=f"x {percent_tag}",
     )
     percent_body = await _list(auth_client, headers, search=f"%50 {percent_tag}")
@@ -225,7 +225,7 @@ async def test_ca07_search_covers_description_and_dose_escapes_wildcards(
         f"Med_sub {underscore_tag}",
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
     )
     underscore_body = await _list(auth_client, headers, search=f"d_sub {underscore_tag}")
     assert underscore_id in {item["id"] for item in underscore_body["items"]}
@@ -236,7 +236,7 @@ async def test_ca07_search_covers_description_and_dose_escapes_wildcards(
         f"Med\\base {backslash_tag}",
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
     )
     backslash_body = await _list(auth_client, headers, search=f"d\\base {backslash_tag}")
     assert backslash_id in {item["id"] for item in backslash_body["items"]}
@@ -256,15 +256,15 @@ async def test_ca08_filters_by_state_and_fks_combined_with_search(
 ) -> None:
     """CA-8: `is_active` y los tres FK filtran exactos y se combinan con `search`."""
     _, headers = await admin_actor(db_conn)
-    drug_a, brand_a, loc_a = await make_catalogs(db_conn, suffix=unique_suffix())
-    drug_b, brand_b, loc_b = await make_catalogs(db_conn, suffix=unique_suffix())
+    drug_a, brand_a, cell_a = await make_catalogs(db_conn, suffix=unique_suffix())
+    drug_b, brand_b, cell_b = await make_catalogs(db_conn, suffix=unique_suffix())
     tag = unique_suffix()
     active_id = await create_medication_row(
         db_conn,
         f"Filtro {tag} A",
         drug_type_id=drug_a,
         brand_id=brand_a,
-        location_id=loc_a,
+        cell_id=cell_a,
         is_active=True,
     )
     inactive_id = await create_medication_row(
@@ -272,7 +272,7 @@ async def test_ca08_filters_by_state_and_fks_combined_with_search(
         f"Filtro {tag} B",
         drug_type_id=drug_b,
         brand_id=brand_b,
-        location_id=loc_b,
+        cell_id=cell_b,
         is_active=False,
     )
 
@@ -293,8 +293,8 @@ async def test_ca08_filters_by_state_and_fks_combined_with_search(
     by_brand = await _list(auth_client, headers, search=tag, brand_id=brand_b)
     assert {item["id"] for item in by_brand["items"]} == {inactive_id}
 
-    by_location = await _list(auth_client, headers, search=tag, location_id=loc_a)
-    assert {item["id"] for item in by_location["items"]} == {active_id}
+    by_cell = await _list(auth_client, headers, search=tag, cell_id=cell_a)
+    assert {item["id"] for item in by_cell["items"]} == {active_id}
 
     combined = await _list(
         auth_client,
@@ -302,7 +302,7 @@ async def test_ca08_filters_by_state_and_fks_combined_with_search(
         search=tag,
         drug_type_id=drug_a,
         brand_id=brand_a,
-        location_id=loc_a,
+        cell_id=cell_a,
         is_active=True,
     )
     assert {item["id"] for item in combined["items"]} == {active_id}
@@ -310,7 +310,7 @@ async def test_ca08_filters_by_state_and_fks_combined_with_search(
     mismatch = await _list(auth_client, headers, search=tag, drug_type_id=drug_a, brand_id=brand_b)
     assert mismatch["items"] == []
 
-    for param in ("drug_type_id", "brand_id", "location_id"):
+    for param in ("drug_type_id", "brand_id", "cell_id"):
         for value in ("0", "-1", "abc"):
             response = await auth_client.get(
                 MEDICATIONS_PATH, headers=headers, params={param: value}

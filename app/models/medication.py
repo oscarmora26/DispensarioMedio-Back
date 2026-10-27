@@ -22,8 +22,8 @@ from app.models.mixins import UpdatedAtMixin
 
 if TYPE_CHECKING:
     from app.models.brand import Brand
+    from app.models.cell import Cell
     from app.models.drug_type import DrugType
-    from app.models.location import Location
     from app.models.visit_medication import VisitMedication
 
 
@@ -35,7 +35,7 @@ class Medication(UpdatedAtMixin, Base):
         UniqueConstraint("description", "brand_id", "dose", name="uq_medications_identity"),
         Index("ix_medications_drug_type_id", "drug_type_id"),
         Index("ix_medications_brand_id", "brand_id"),
-        Index("ix_medications_location_id", "location_id"),
+        Index("ix_medications_cell_id", "cell_id"),
         Index(
             "ix_medications_description_trgm",
             literal_column("(description::text)"),
@@ -58,9 +58,9 @@ class Medication(UpdatedAtMixin, Base):
         ForeignKey("brands.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    location_id: Mapped[int] = mapped_column(
+    cell_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("locations.id", ondelete="RESTRICT"),
+        ForeignKey("cells.id", ondelete="RESTRICT"),
         nullable=False,
     )
     dose: Mapped[str] = mapped_column(CITEXT, nullable=False)
@@ -68,7 +68,7 @@ class Medication(UpdatedAtMixin, Base):
 
     drug_type: Mapped[DrugType] = relationship(back_populates="medications", lazy="raise")
     brand: Mapped[Brand] = relationship(back_populates="medications", lazy="raise")
-    location: Mapped[Location] = relationship(back_populates="medications", lazy="raise")
+    cell: Mapped[Cell] = relationship(back_populates="medications", lazy="raise")
     visit_medications: Mapped[list[VisitMedication]] = relationship(
         back_populates="medication", lazy="raise"
     )

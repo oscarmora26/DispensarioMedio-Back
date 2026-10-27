@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from tests.auth_support import auth_headers, cached_password_hash, create_auth_user, token_for
-from tests.db_support import create_brand, create_drug_type, create_location, unique_suffix
+from tests.db_support import create_brand, create_cell, create_drug_type, unique_suffix
 from tests.users_support import assert_error_envelope
 
 MEDICATIONS_PATH = "/api/v1/medications"
@@ -20,13 +20,13 @@ ITEM_KEYS = {
     "description",
     "drug_type_id",
     "brand_id",
-    "location_id",
+    "cell_id",
     "dose",
     "is_active",
 }
 
 #: Claves que nunca deben aparecer en una respuesta con medicamento.
-FORBIDDEN_KEYS = {"created_at", "updated_at", "drug_type", "brand", "location"}
+FORBIDDEN_KEYS = {"created_at", "updated_at", "drug_type", "brand", "cell"}
 
 
 def medication_path(medication_id: int) -> str:
@@ -37,19 +37,23 @@ def medication_path(medication_id: int) -> str:
 async def make_catalogs(
     conn: AsyncConnection, *, suffix: str | None = None
 ) -> tuple[int, int, int]:
-    """Crea un tipo, una marca y una ubicación activos y devuelve sus ids."""
+    """Crea un tipo, una marca y una celda activos y devuelve sus ids.
+
+    El tercer id es el de la celda: `medications.cell_id` referencia
+    `cells.id` desde FEAT-017.
+    """
     tag = suffix or unique_suffix()
     drug_type_id = await create_drug_type(conn, f"Tipo {tag}")
     brand_id = await create_brand(conn, f"Marca {tag}")
-    location_id = await create_location(conn, f"Ubicación {tag}")
-    return drug_type_id, brand_id, location_id
+    cell_id = await create_cell(conn, description=f"Celda {tag}")
+    return drug_type_id, brand_id, cell_id
 
 
 def medication_body(
     tag: str,
     drug_type_id: int,
     brand_id: int,
-    location_id: int,
+    cell_id: int,
     *,
     description: str | None = None,
     dose: str | None = None,
@@ -60,7 +64,7 @@ def medication_body(
         "description": description if description is not None else f"Med {tag}",
         "drug_type_id": drug_type_id,
         "brand_id": brand_id,
-        "location_id": location_id,
+        "cell_id": cell_id,
         "dose": dose if dose is not None else f"{tag[:4]} mg",
         "is_active": is_active,
     }
@@ -97,7 +101,7 @@ async def fetch_medication_row(conn: AsyncConnection, medication_id: int) -> dic
     result = await conn.execute(
         text(
             """
-            SELECT id, description, drug_type_id, brand_id, location_id,
+            SELECT id, description, drug_type_id, brand_id, cell_id,
                    dose, is_active, created_at, updated_at
             FROM medications
             WHERE id = :medication_id
@@ -115,7 +119,7 @@ async def create_medication_row(
     *,
     drug_type_id: int | None = None,
     brand_id: int | None = None,
-    location_id: int | None = None,
+    cell_id: int | None = None,
     dose: str = "500 mg",
     is_active: bool = True,
 ) -> int:
@@ -123,13 +127,13 @@ async def create_medication_row(
     tag = unique_suffix()
     resolved_drug = drug_type_id if drug_type_id is not None else await create_drug_type(conn)
     resolved_brand = brand_id if brand_id is not None else await create_brand(conn)
-    resolved_location = location_id if location_id is not None else await create_location(conn)
+    resolved_cell = cell_id if cell_id is not None else await create_cell(conn)
     result = await conn.execute(
         text(
             """
             INSERT INTO medications
-                (description, drug_type_id, brand_id, location_id, dose, is_active)
-            VALUES (:description, :drug_type_id, :brand_id, :location_id, :dose, :is_active)
+                (description, drug_type_id, brand_id, cell_id, dose, is_active)
+            VALUES (:description, :drug_type_id, :brand_id, :cell_id, :dose, :is_active)
             RETURNING id
             """
         ),
@@ -137,7 +141,7 @@ async def create_medication_row(
             "description": description or f"Med {tag}",
             "drug_type_id": resolved_drug,
             "brand_id": resolved_brand,
-            "location_id": resolved_location,
+            "cell_id": resolved_cell,
             "dose": dose,
             "is_active": is_active,
         },

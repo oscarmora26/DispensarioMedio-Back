@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from tests.auth_support import auth_headers, cached_password_hash, create_auth_user, token_for
-from tests.db_support import create_brand, create_location, unique_suffix
+from tests.db_support import create_brand, create_cell, unique_suffix
 from tests.users_support import assert_error_envelope
 
 DRUG_TYPES_PATH = "/api/v1/drug-types"
@@ -103,12 +103,12 @@ async def create_medication_for_drug_type(
     """Crea un medicamento que referencia al tipo indicado y devuelve su id."""
     tag = suffix or unique_suffix()
     brand_id = await create_brand(conn, f"Marca {tag}")
-    location_id = await create_location(conn, f"Ubicacion {tag}")
+    cell_id = await create_cell(conn, description=f"Celda {tag}")
     result = await conn.execute(
         text(
             """
-            INSERT INTO medications (description, drug_type_id, brand_id, location_id, dose)
-            VALUES (:description, :drug_type_id, :brand_id, :location_id, :dose)
+            INSERT INTO medications (description, drug_type_id, brand_id, cell_id, dose)
+            VALUES (:description, :drug_type_id, :brand_id, :cell_id, :dose)
             RETURNING id
             """
         ),
@@ -116,7 +116,7 @@ async def create_medication_for_drug_type(
             "description": f"Medicamento {tag}",
             "drug_type_id": drug_type_id,
             "brand_id": brand_id,
-            "location_id": location_id,
+            "cell_id": cell_id,
             "dose": "500 mg",
         },
     )

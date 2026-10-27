@@ -38,7 +38,7 @@ _COMMON_RESPONSES = {
     description=(
         "Devuelve una pagina de medicamentos con busqueda parcial y "
         "case-insensitive en description o dose, filtros opcionales por estado y "
-        "por drug_type_id, brand_id y location_id, y orden por el catalogo "
+        "por drug_type_id, brand_id y cell_id, y orden por el catalogo "
         "permitido. Accesible para ADMIN y MEDICO."
     ),
     responses={
@@ -60,13 +60,13 @@ async def list_medications(
         int | None, Query(ge=1, description="Filtra por tipo de fármaco")
     ] = None,
     brand_id: Annotated[int | None, Query(ge=1, description="Filtra por marca")] = None,
-    location_id: Annotated[int | None, Query(ge=1, description="Filtra por ubicación")] = None,
+    cell_id: Annotated[int | None, Query(ge=1, description="Filtra por celda")] = None,
     sort: Annotated[
         str,
         Query(
             pattern=SORT_PATTERN,
             description=(
-                "description, dose, drug_type_id, brand_id, location_id, "
+                "description, dose, drug_type_id, brand_id, cell_id, "
                 "created_at, is_active o id; prefijo '-' descendente"
             ),
         ),
@@ -81,7 +81,7 @@ async def list_medications(
         is_active=is_active,
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
         sort=sort,
     )
 
@@ -140,7 +140,7 @@ async def get_medication(
     response_model=MedicationRead,
     summary="Reemplazar un medicamento",
     description=(
-        "Reemplazo completo de description, drug_type_id, brand_id, location_id, "
+        "Reemplazo completo de description, drug_type_id, brand_id, cell_id, "
         "dose e is_active. Permite reactivar con is_active true y desactivar con "
         "false. Los FK deben existir y estar activos. Solo accesible para ADMIN."
     ),

@@ -28,14 +28,14 @@ async def test_ca01_medico_reads_but_never_writes(
     """CA-1: MEDICO lee (200) y recibe 403 `forbidden` al escribir, sin efectos."""
     _, admin_headers = await admin_actor(db_conn)
     _, medico_headers = await medico_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
     tag = unique_suffix()
     active_id = await create_medication_row(
         db_conn,
         f"Activa {tag}",
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
         is_active=True,
     )
     target = await fetch_medication_row(db_conn, active_id)
@@ -49,7 +49,7 @@ async def test_ca01_medico_reads_but_never_writes(
     detail = await auth_client.get(medication_path(active_id), headers=medico_headers)
     assert detail.status_code == 200, detail.text
 
-    write_body = medication_body(write_tag, drug_type_id, brand_id, location_id)
+    write_body = medication_body(write_tag, drug_type_id, brand_id, cell_id)
     responses = [
         await auth_client.post(MEDICATIONS_PATH, headers=medico_headers, json=write_body),
         await auth_client.put(medication_path(active_id), headers=medico_headers, json=write_body),
@@ -65,7 +65,7 @@ async def test_ca01_medico_reads_but_never_writes(
     assert after["dose"] == target["dose"]
     assert after["drug_type_id"] == target["drug_type_id"]
     assert after["brand_id"] == target["brand_id"]
-    assert after["location_id"] == target["location_id"]
+    assert after["cell_id"] == target["cell_id"]
     assert after["is_active"] == target["is_active"]
     assert await count_medications(db_conn) == before_count
 
@@ -78,7 +78,7 @@ async def test_ca02_authentication_matrix(
 ) -> None:
     """CA-2: 401 sin cabecera/esquema ajeno/token inválido, 403 de inactivos."""
     admin_id, _ = await admin_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
 
     missing = await auth_client.get(MEDICATIONS_PATH)
     body = assert_error_envelope(missing, 401, "not_authenticated")
@@ -122,7 +122,7 @@ async def test_ca02_authentication_matrix(
         post_response = await auth_client.post(
             MEDICATIONS_PATH,
             headers=inactive_headers,
-            json=medication_body(unique_suffix(), drug_type_id, brand_id, location_id),
+            json=medication_body(unique_suffix(), drug_type_id, brand_id, cell_id),
         )
         assert_error_envelope(post_response, 403, "inactive_user")
 

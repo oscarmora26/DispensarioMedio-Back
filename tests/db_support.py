@@ -223,21 +223,53 @@ async def create_brand(conn: AsyncConnection, description: str | None = None) ->
     )
 
 
-async def create_location(conn: AsyncConnection, description: str | None = None) -> int:
-    """Crea una ubicacion con posicion unica y devuelve su id."""
+async def create_shelf(
+    conn: AsyncConnection,
+    name: str | None = None,
+    *,
+    description: str | None = None,
+    is_active: bool = True,
+) -> int:
+    """Crea un estante con nombre unico y devuelve su id."""
+    return await insert_id(
+        conn,
+        """
+        INSERT INTO shelves (name, description, is_active)
+        VALUES (:name, :description, :is_active)
+        RETURNING id
+        """,
+        {
+            "name": name or f"Estante {unique_suffix()}",
+            "description": description,
+            "is_active": is_active,
+        },
+    )
+
+
+async def create_cell(
+    conn: AsyncConnection,
+    *,
+    shelf_id: int | None = None,
+    section: str | None = None,
+    cell: str | None = None,
+    description: str | None = None,
+    is_active: bool = True,
+) -> int:
+    """Crea una celda con posicion unica (estante propio si falta) y devuelve su id."""
     suffix = unique_suffix()
     return await insert_id(
         conn,
         """
-        INSERT INTO locations (description, shelf, section, cell)
-        VALUES (:description, :shelf, :section, :cell)
+        INSERT INTO cells (shelf_id, section, cell, description, is_active)
+        VALUES (:shelf_id, :section, :cell, :description, :is_active)
         RETURNING id
         """,
         {
-            "description": description or f"Ubicacion {suffix}",
-            "shelf": f"A-{suffix}",
-            "section": f"B-{suffix}",
-            "cell": f"C-{suffix}",
+            "shelf_id": shelf_id if shelf_id is not None else await create_shelf(conn),
+            "section": section or f"B-{suffix}",
+            "cell": cell or f"C-{suffix}",
+            "description": description,
+            "is_active": is_active,
         },
     )
 
@@ -248,22 +280,22 @@ async def create_medication(
     description: str | None = None,
     brand_id: int | None = None,
     drug_type_id: int | None = None,
-    location_id: int | None = None,
+    cell_id: int | None = None,
     dose: str = "500 mg",
 ) -> int:
     """Crea un medicamento (y sus catalogos si faltan) y devuelve su id."""
     return await insert_id(
         conn,
         """
-        INSERT INTO medications (description, drug_type_id, brand_id, location_id, dose)
-        VALUES (:description, :drug_type_id, :brand_id, :location_id, :dose)
+        INSERT INTO medications (description, drug_type_id, brand_id, cell_id, dose)
+        VALUES (:description, :drug_type_id, :brand_id, :cell_id, :dose)
         RETURNING id
         """,
         {
             "description": description or f"Medicamento {unique_suffix()}",
             "drug_type_id": drug_type_id or await create_drug_type(conn),
             "brand_id": brand_id or await create_brand(conn),
-            "location_id": location_id or await create_location(conn),
+            "cell_id": cell_id or await create_cell(conn),
             "dose": dose,
         },
     )

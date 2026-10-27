@@ -43,7 +43,7 @@ async def test_ca25_integrity_error_on_commit_becomes_409_and_session_survives(
 ) -> None:
     """CA-25: carrera en `uq_medications_identity` ⇒ 409 sin fila nueva ni sesión rota."""
     _, headers = await admin_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
     before = await count_medications(db_conn)
 
     async def failing_commit(session: AsyncSession) -> None:
@@ -56,7 +56,7 @@ async def test_ca25_integrity_error_on_commit_becomes_409_and_session_survives(
     response = await auth_client.post(
         MEDICATIONS_PATH,
         headers=headers,
-        json=medication_body(unique_suffix(), drug_type_id, brand_id, location_id),
+        json=medication_body(unique_suffix(), drug_type_id, brand_id, cell_id),
     )
     body = assert_error_envelope(response, 409, "medication_exists")
     assert body["detail"] == "El medicamento ya existe"
@@ -75,10 +75,10 @@ async def test_ca26_every_error_uses_the_exact_envelope(
 
     _, admin_headers = await admin_actor(db_conn)
     _, medico_headers = await medico_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
     tag = unique_suffix()
     payload = medication_body(
-        tag, drug_type_id, brand_id, location_id, description=f"Base {tag}", dose=f"500 mg {tag}"
+        tag, drug_type_id, brand_id, cell_id, description=f"Base {tag}", dose=f"500 mg {tag}"
     )
     created = await auth_client.post(MEDICATIONS_PATH, headers=admin_headers, json=payload)
     assert created.status_code == 201, created.text
@@ -115,7 +115,7 @@ async def test_ca26_every_error_uses_the_exact_envelope(
             await auth_client.post(
                 MEDICATIONS_PATH,
                 headers=medico_headers,
-                json=medication_body(unique_suffix(), drug_type_id, brand_id, location_id),
+                json=medication_body(unique_suffix(), drug_type_id, brand_id, cell_id),
             ),
             403,
             "forbidden",
@@ -170,7 +170,7 @@ async def test_ca26_every_error_uses_the_exact_envelope(
             await auth_client.put(
                 medication_path(missing_id),
                 headers=admin_headers,
-                json=medication_body(unique_suffix(), drug_type_id, brand_id, location_id),
+                json=medication_body(unique_suffix(), drug_type_id, brand_id, cell_id),
             ),
             404,
             "medication_not_found",
@@ -199,14 +199,14 @@ async def test_ca27_all_events_carry_ids_and_never_leak_secrets(
 ) -> None:
     """CA-27: `created`/`updated`/`deactivated` con ids, sin tokens ni descripciones."""
     actor_id, headers = await admin_actor(db_conn)
-    drug_type_id, brand_id, location_id = await make_catalogs(db_conn)
+    drug_type_id, brand_id, cell_id = await make_catalogs(db_conn)
     tag = unique_suffix()
     caplog.set_level(logging.INFO)
 
     created = await auth_client.post(
         MEDICATIONS_PATH,
         headers=headers,
-        json=medication_body(tag, drug_type_id, brand_id, location_id),
+        json=medication_body(tag, drug_type_id, brand_id, cell_id),
     )
     assert created.status_code == 201, created.text
     medication_id = created.json()["id"]
@@ -214,7 +214,7 @@ async def test_ca27_all_events_carry_ids_and_never_leak_secrets(
     updated = await auth_client.put(
         medication_path(medication_id),
         headers=headers,
-        json=medication_body(tag, drug_type_id, brand_id, location_id, dose=f"750 mg {tag}"),
+        json=medication_body(tag, drug_type_id, brand_id, cell_id, dose=f"750 mg {tag}"),
     )
     assert updated.status_code == 200, updated.text
 
@@ -227,7 +227,7 @@ async def test_ca27_all_events_carry_ids_and_never_leak_secrets(
             "description": str(fetched["description"]),
             "drug_type_id": int(fetched["drug_type_id"]),
             "brand_id": int(fetched["brand_id"]),
-            "location_id": int(fetched["location_id"]),
+            "cell_id": int(fetched["cell_id"]),
             "dose": str(fetched["dose"]),
             "is_active": False,
         },
@@ -273,7 +273,7 @@ async def test_ca27_put_deactivation_emits_deactivated_instead_of_updated(
             "description": str(before["description"]),
             "drug_type_id": int(before["drug_type_id"]),
             "brand_id": int(before["brand_id"]),
-            "location_id": int(before["location_id"]),
+            "cell_id": int(before["cell_id"]),
             "dose": str(before["dose"]),
             "is_active": False,
         },

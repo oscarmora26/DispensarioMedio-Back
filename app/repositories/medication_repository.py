@@ -13,7 +13,7 @@ SORT_COLUMNS = {
     "dose": Medication.dose,
     "drug_type_id": Medication.drug_type_id,
     "brand_id": Medication.brand_id,
-    "location_id": Medication.location_id,
+    "cell_id": Medication.cell_id,
     "created_at": Medication.created_at,
     "is_active": Medication.is_active,
     "id": Medication.id,
@@ -64,7 +64,7 @@ def _list_conditions(
     is_active: bool | None,
     drug_type_id: int | None,
     brand_id: int | None,
-    location_id: int | None,
+    cell_id: int | None,
 ) -> list[object]:
     conditions: list[object] = []
     if search:
@@ -81,8 +81,8 @@ def _list_conditions(
         conditions.append(Medication.drug_type_id == drug_type_id)
     if brand_id is not None:
         conditions.append(Medication.brand_id == brand_id)
-    if location_id is not None:
-        conditions.append(Medication.location_id == location_id)
+    if cell_id is not None:
+        conditions.append(Medication.cell_id == cell_id)
     return conditions
 
 
@@ -110,7 +110,7 @@ async def list_medications(
     is_active: bool | None,
     drug_type_id: int | None,
     brand_id: int | None,
-    location_id: int | None,
+    cell_id: int | None,
     sort_field: str,
     sort_desc: bool,
 ) -> tuple[list[Medication], int]:
@@ -120,7 +120,7 @@ async def list_medications(
         is_active=is_active,
         drug_type_id=drug_type_id,
         brand_id=brand_id,
-        location_id=location_id,
+        cell_id=cell_id,
     )
 
     total_result = await session.execute(select(func.count(Medication.id)).where(*conditions))

@@ -179,35 +179,32 @@ async def test_ca21_upgrade_head_is_idempotent() -> None:
     assert await scalar("SELECT count(*) FROM alembic_version") == 1
 
 
-async def test_ca17_downgrade_one_and_upgrade_restores_seed() -> None:
-    """CA-17: bajar el seed respeta los roles en uso y volver a subir deja los dos roles.
+async def test_ca17_downgrade_one_and_upgrade_head_roundtrips_the_last_revision() -> None:
+    """CA-17: `downgrade -1` deshace la ultima revision y `upgrade head` la restaura.
 
-    La BD de desarrollo tiene cuentas permanentes (`admin`/`medico`) que referencian
-    ambos roles, por lo que `UNSEED_ROLES_SQL` no los borra (R-6). El test comprueba
-    que los roles referenciados sobreviven y que `upgrade head` restaura el seed.
+    Con la cadena actual la ultima revision es
+    `rename_medications_location_id_to_cell_id`; el resto del esquema y los
+    roles existentes no se tocan.
     """
     roles_before = {
         row["name"] for row in await _fetch_rows("SELECT name FROM roles ORDER BY name")
     }
-    roles_in_use = {
-        row["name"]
-        for row in await _fetch_rows(
-            """
-            SELECT DISTINCT r.name FROM roles r
-            JOIN users u ON u.role_id = r.id
-            """
-        )
-    }
+    cell_column_sql = (
+        "SELECT count(*) FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND table_name = 'medications' "
+        "AND column_name = 'cell_id'"
+    )
     try:
         alembic_ok("downgrade", "-1")
 
         roles_after = {
             row["name"] for row in await _fetch_rows("SELECT name FROM roles ORDER BY name")
         }
-        assert roles_in_use <= roles_after
-        assert roles_after <= roles_before
+        assert roles_after == roles_before
+        assert await scalar(cell_column_sql) == 0
 
         alembic_ok("upgrade", "head")
+        assert await scalar(cell_column_sql) == 1
         roles = await scalar("SELECT count(*) FROM roles")
         assert roles == 2
     finally:
@@ -272,8 +269,8 @@ async def test_ca20_full_roundtrip_restores_the_expected_schema() -> None:
         roles = await scalar("SELECT count(*) FROM roles")
         users = await scalar("SELECT count(*) FROM users")
 
-        assert tables == 12
-        assert indexes == 38
+        assert tables == 13
+        assert indexes == 41
         assert extensions == 2
         assert roles == 2
         assert users == 0
