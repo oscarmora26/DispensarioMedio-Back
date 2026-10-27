@@ -1,5 +1,11 @@
 # FEAT-009 — Gestión de ubicaciones: CRUD, permisos y desactivación lógica
 
+> **Nota de vigencia (2026-10-27).** Este documento describe el contrato tal como se aprobó en su fecha y se
+> conserva como registro histórico. Desde **FEAT-017** la tabla `locations` fue reemplazada por
+> `shelves` + `cells`: `/api/v1/locations` ya no existe (ahora son `/api/v1/shelves` y `/api/v1/cells`) y
+> `medications.location_id` pasó a llamarse `medications.cell_id` (FK a `cells.id`). El contrato vigente
+> está en [FEAT-017](FEAT-017.md).
+
 ## Contexto
 
 La tabla `locations` ya existe (FEAT-003): `description CITEXT`, `shelf CITEXT`, `section CITEXT`, `cell CITEXT` con restricción única compuesta `uq_locations_position (shelf, section, cell)`, `is_active BOOLEAN DEFAULT true`, y relación `medications` (FK `medications.location_id → locations.id ON DELETE RESTRICT`). Hoy **no existe ninguna vía HTTP para crear, consultar, actualizar o desactivar ubicaciones**.

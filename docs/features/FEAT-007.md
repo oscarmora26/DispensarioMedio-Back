@@ -1,5 +1,11 @@
 # FEAT-007 — Gestión de tipos de fármacos: CRUD, permisos y desactivación lógica
 
+> **Nota de vigencia (2026-10-27).** Este documento describe el contrato tal como se aprobó en su fecha y se
+> conserva como registro histórico. Desde **FEAT-017** la tabla `locations` fue reemplazada por
+> `shelves` + `cells`: `/api/v1/locations` ya no existe (ahora son `/api/v1/shelves` y `/api/v1/cells`) y
+> `medications.location_id` pasó a llamarse `medications.cell_id` (FK a `cells.id`). El contrato vigente
+> está en [FEAT-017](FEAT-017.md).
+
 **Estado:** `approved` (aprobada explícitamente por el humano el 2026-10-21)
 **Fecha:** 2026-10-21
 **Alcance:** `GET/POST /api/v1/drug-types`, `GET/PUT/DELETE /api/v1/drug-types/{drug_type_id}`, con lectura para `ADMIN` y `MEDICO` y escritura solo para `ADMIN`, reutilizando autenticación JWT, envelope de error `{detail, code, errors}` y desactivación lógica de FEAT-002/FEAT-004.

@@ -3,7 +3,7 @@
 **Estado:** in_progress
 **Fecha:** 2026-10-27
 **Pedido del humano (verbatim):** "Quiero que no tomes en cuanta los acentos al realizar las busquedas" → aprobado con "Realiza el cambio".
-**Alcance:** los 7 listados con parámetro `search`: `/drug-types`, `/brands`, `/locations`, `/medications`, `/patients`, `/doctors`, `/users`.
+**Alcance:** los 7 listados con parámetro `search`: `/drug-types`, `/brands`, `/shelves`, `/medications`, `/patients`, `/doctors`, `/users`. (En la fecha de la feature el catálogo de ubicaciones era `/locations`; FEAT-017 lo reemplazó por `/shelves` + `/cells`, y la regla se trasladó a ambos.)
 
 ## Contexto
 
@@ -29,7 +29,8 @@ Hoy cada repositorio aplica `Columna.ilike(pattern, escape="\\")` sobre columnas
 |---|---|
 | `/drug-types` | `description` |
 | `/brands` | `description` |
-| `/locations` | `description`, `shelf`, `section`, `cell` |
+| `/shelves` | `name`, `description` |
+| `/cells` | `section`, `cell`, `description` |
 | `/medications` | `description`, `dose` |
 | `/patients` | `name`, `cedula`, `carnet` |
 | `/doctors` | `name`, `cedula` |
@@ -39,7 +40,7 @@ Hoy cada repositorio aplica `Columna.ilike(pattern, escape="\\")` sobre columnas
 
 - [ ] **CA-1** `[test]` `/drug-types`: creado `Cápsula <tag>`, `search=capsula <tag>` (sin acento) lo encuentra; `search` con acento encuentra valor almacenado sin acento.
 - [ ] **CA-2** `[test]` `/brands`: misma regla sobre `description`.
-- [ ] **CA-3** `[test]` `/locations`: `search` sin acento encuentra por `description` acentuada.
+- [x] **CA-3** `[test]` `/shelves` y `/cells`: `search` sin acento encuentra por `name`, `description`, `section` y `cell` acentuados (tras FEAT-017).
 - [ ] **CA-4** `[test]` `/medications`: `search` sin acento encuentra por `description` acentuada.
 - [ ] **CA-5** `[test]` `/patients`: `search` sin acento encuentra por `name` acentuado (p. ej. `José` ⇄ `Jose`).
 - [ ] **CA-6** `[test]` `/doctors`: `search` sin acento encuentra por `name` acentuado.

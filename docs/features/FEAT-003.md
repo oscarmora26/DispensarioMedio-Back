@@ -1,5 +1,11 @@
 # FEAT-003 — Esquema de base de datos: modelos SQLAlchemy 2.0 y migraciones Alembic
 
+> **Nota de vigencia (2026-10-27).** Este documento describe el contrato tal como se aprobó en su fecha y se
+> conserva como registro histórico. Desde **FEAT-017** la tabla `locations` fue reemplazada por
+> `shelves` + `cells`: `/api/v1/locations` ya no existe (ahora son `/api/v1/shelves` y `/api/v1/cells`) y
+> `medications.location_id` pasó a llamarse `medications.cell_id` (FK a `cells.id`). El contrato vigente
+> está en [FEAT-017](FEAT-017.md).
+
 **Estado:** `approved` (aprobada explícitamente por el humano el 2026-10-21, incluye `audit_log`)
 **Fecha:** 2026-10-21
 **Alcance:** esquema físico (tablas, constraints, índices, extensiones) + seed de roles. Sin lógica de negocio, sin endpoints.

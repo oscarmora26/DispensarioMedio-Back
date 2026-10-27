@@ -168,3 +168,15 @@ El resto de las suites no cambio: `tests/test_medications_*.py`, `tests/test_db_
 - `uv run ruff format --check .` -> 230 archivos formateados
 - `uv run alembic check` -> sin operaciones nuevas
 - Smoke por API: `POST /shelves` (201, `cells: []`), `POST /cells` (201, `description: null`), `GET /shelves/{id}` con celdas anidadas, `GET /cells?shelf_id=`, `409 cell_position_exists`, `404 shelf_not_found`, `409 cell_has_medications`, `PUT /cells/{id}` (200 con `updated_at` fresco), `PUT /shelves/{id}` sin tocar celdas.
+
+## Slices de entrega (ramas apiladas)
+
+La feature se entrego en dos commits que se revisan por separado:
+
+| Slice | Rama | Commit | Foco |
+|---|---|---|---|
+| 1 | `feat/FEAT-017-shelves-cells` | `0191268` | modelos `Shelf`/`Cell`, migracion `f39f66eed513`, `medications.cell_id` (migracion `4ad3df9e109d`), contrato de `/shelves` |
+| 2 | `feat/FEAT-017-api-separada` | `9364c31` | recurso `/cells`, validaciones de posicion y separacion de la escritura |
+
+Ambos slices exceden las ~400 lineas recomendadas porque incluyen sus suites de tests completas; la
+justificacion y el plan de PRs encadenados estan en `docs/reviews/stacked-prs.md`.
