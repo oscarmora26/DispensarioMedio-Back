@@ -92,6 +92,31 @@ class LoginResponse(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"
     expires_in: int = Field(description="Vigencia del token en segundos")
+    refresh_token: str = Field(
+        description="Credencial opaca de renovacion; viaja solo a /auth/refresh y /auth/logout"
+    )
+    refresh_expires_in: int = Field(description="Vigencia del refresh token en segundos")
+    user: LoginUser
+
+
+class RefreshRequest(BaseModel):
+    """Body de `/auth/refresh` y `/auth/logout`: el refresh token es la credencial."""
+
+    refresh_token: str = Field(
+        min_length=1,
+        max_length=512,
+        description="Refresh token emitido por el login o por un refresh previo",
+    )
+
+
+class RefreshResponse(BaseModel):
+    """Par de tokens renovado por `/auth/refresh`."""
+
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_in: int = Field(description="Vigencia del access token en segundos")
+    refresh_token: str = Field(description="Refresh token sucesor; el anterior queda inutilizable")
+    refresh_expires_in: int = Field(description="Vigencia del refresh token en segundos")
     user: LoginUser
 
 

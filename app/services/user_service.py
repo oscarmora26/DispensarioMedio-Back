@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import structlog
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
@@ -11,7 +13,7 @@ from app.core.exceptions import AppError, ConflictError, NotFoundError
 from app.core.security import hash_password
 from app.models.role import Role
 from app.models.user import User
-from app.repositories import doctor_repository, user_repository
+from app.repositories import doctor_repository, refresh_token_repository, user_repository
 from app.schemas.user import (
     SORT_FIELDS,
     UserCreate,
@@ -370,6 +372,13 @@ async def deactivate_user(
 
     user.is_active = False
     _touch(user)
+    # Cascada: desactivar la cuenta cierra sus sesiones (regla 27).
+    await refresh_token_repository.revoke_all_for_user(
+        session,
+        user_id=user.id,
+        reason="user_deactivated",
+        now=datetime.now(UTC),
+    )
     await _commit(session)
     logger.info("user.deactivated", user_id=user.id, actor_id=actor.id)
 
@@ -386,5 +395,12 @@ async def reset_password(
 
     user.password_hash = hash_password(new_password)
     _touch(user)
+    # Cascada: restablecer la contrasena cierra las sesiones abiertas (regla 26).
+    await refresh_token_repository.revoke_all_for_user(
+        session,
+        user_id=user.id,
+        reason="password_reset",
+        now=datetime.now(UTC),
+    )
     await _commit(session)
     logger.info("user.password_reset", user_id=user.id, actor_id=actor.id)

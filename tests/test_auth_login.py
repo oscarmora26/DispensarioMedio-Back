@@ -35,9 +35,16 @@ async def test_ca10_admin_login_response_shape(
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"access_token", "token_type", "expires_in", "user"}
+    assert set(body) == {
+        "access_token",
+        "token_type",
+        "expires_in",
+        "refresh_token",
+        "refresh_expires_in",
+        "user",
+    }
     assert body["token_type"] == "bearer"
-    assert body["expires_in"] == 1800
+    assert body["expires_in"] == 900
     assert body["access_token"].count(".") == 2
     assert set(body["user"]) == {"id", "username", "email", "role", "doctor_id"}
     assert body["user"]["id"] == user_id

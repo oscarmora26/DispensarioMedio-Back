@@ -19,12 +19,16 @@ def test_ca41_openapi_declares_auth_contract() -> None:
     assert auth_paths == [
         "/api/v1/auth/change-password",
         "/api/v1/auth/login",
+        "/api/v1/auth/logout",
         "/api/v1/auth/me",
+        "/api/v1/auth/refresh",
     ]
 
     assert bool(paths["/api/v1/auth/me"]["get"].get("security")) is True
     assert bool(paths["/api/v1/auth/change-password"]["post"].get("security")) is True
     assert "security" not in paths["/api/v1/auth/login"]["post"]
+    assert "security" not in paths["/api/v1/auth/refresh"]["post"]
+    assert "security" not in paths["/api/v1/auth/logout"]["post"]
 
     login = paths["/api/v1/auth/login"]["post"]
     assert sorted(login["responses"]) == ["200", "401", "403", "422", "429"]

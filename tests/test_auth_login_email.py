@@ -43,9 +43,16 @@ async def test_ca1_login_by_email_returns_the_exact_login_response(
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"access_token", "token_type", "expires_in", "user"}
+    assert set(body) == {
+        "access_token",
+        "token_type",
+        "expires_in",
+        "refresh_token",
+        "refresh_expires_in",
+        "user",
+    }
     assert body["token_type"] == "bearer"
-    assert body["expires_in"] == 1800
+    assert body["expires_in"] == 900
     assert body["access_token"].count(".") == 2
     assert set(body["user"]) == {"id", "username", "email", "role", "doctor_id"}
     assert body["user"] == {
@@ -290,7 +297,7 @@ async def test_ca8_response_and_claims_are_identical_for_both_identifiers(
     email_body = by_email.json()
     assert set(username_body) == set(email_body)
     assert set(username_body["user"]) == set(email_body["user"])
-    assert username_body["expires_in"] == email_body["expires_in"] == 1800
+    assert username_body["expires_in"] == email_body["expires_in"] == 900
 
     for body, user_id in ((username_body, username_id), (email_body, email_id)):
         claims = token_payload(body["access_token"])
@@ -298,7 +305,7 @@ async def test_ca8_response_and_claims_are_identical_for_both_identifiers(
         assert claims["sub"] == str(user_id)
         assert claims["role"] == "ADMIN"
         assert claims["doctor_id"] is None
-        assert claims["exp"] - claims["iat"] == 1800
+        assert claims["exp"] - claims["iat"] == 900
 
 
 async def test_ca9_username_login_remains_unchanged(

@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser
@@ -15,6 +15,8 @@ from app.schemas.auth import (
     LoginUser,
     MeResponse,
     MessageResponse,
+    RefreshRequest,
+    RefreshResponse,
 )
 from app.services import auth_service
 
@@ -30,8 +32,9 @@ LoginRateLimiterDep = Annotated[LoginRateLimiter, Depends(get_login_rate_limiter
     summary="Iniciar sesion con usuario o correo",
     description=(
         "Autentica por nombre de usuario o correo electronico y contrasena. "
-        "Devuelve un JWT HS256; el body debe incluir exactamente uno de `email` o `username`. "
-        "Aplica rate limiting por IP e identificador; el intento bloqueado responde 429."
+        "Devuelve un JWT HS256 y un refresh token opaco; el body debe incluir exactamente "
+        "uno de `email` o `username`. Aplica rate limiting por IP e identificador; "
+        "el intento bloqueado responde 429."
     ),
     responses={
         status.HTTP_401_UNAUTHORIZED: {"description": "Credenciales invalidas"},
@@ -54,6 +57,7 @@ async def login(
         email=payload.email,
         password=payload.password,
         client_ip=client_ip,
+        user_agent=request.headers.get("user-agent"),
         limiter=limiter,
     )
     user = result.user
@@ -61,6 +65,8 @@ async def login(
         access_token=result.access_token,
         token_type="bearer",
         expires_in=result.expires_in,
+        refresh_token=result.refresh_token,
+        refresh_expires_in=result.refresh_expires_in,
         user=LoginUser(
             id=user.id,
             username=user.username,
@@ -69,6 +75,69 @@ async def login(
             doctor_id=user.doctor_id,
         ),
     )
+
+
+@router.post(
+    "/refresh",
+    response_model=RefreshResponse,
+    summary="Renovar el par de tokens",
+    description=(
+        "Rota el refresh token recibido: devuelve un access token nuevo y un refresh token "
+        "sucesor, e invalida el anterior. El token es la credencial, por lo que no requiere "
+        "`Authorization`. Un token inexistente, expirado, revocado o reutilizado responde 401."
+    ),
+    responses={
+        status.HTTP_401_UNAUTHORIZED: {"description": "Refresh token invalido"},
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {"description": "Datos invalidos"},
+    },
+)
+async def refresh(
+    request: Request,
+    payload: RefreshRequest,
+    session: SessionDep,
+) -> RefreshResponse:
+    """Renueva el par de tokens a partir de un refresh token vigente."""
+    client_ip = request.client.host if request.client else "unknown"
+    result = await auth_service.refresh(
+        session,
+        refresh_token=payload.refresh_token,
+        client_ip=client_ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    user = result.user
+    return RefreshResponse(
+        access_token=result.access_token,
+        token_type="bearer",
+        expires_in=result.expires_in,
+        refresh_token=result.refresh_token,
+        refresh_expires_in=result.refresh_expires_in,
+        user=LoginUser(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            role=user.role.name,
+            doctor_id=user.doctor_id,
+        ),
+    )
+
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Cerrar la sesion del refresh token",
+    description=(
+        "Revoca el refresh token recibido. Responde 204 siempre: el token no existe, ya fue "
+        "revocado o ya fue rotado. No requiere `Authorization` y no afecta otras sesiones."
+    ),
+    responses={
+        status.HTTP_204_NO_CONTENT: {"description": "Sesion cerrada o ya cerrada"},
+        status.HTTP_422_UNPROCESSABLE_CONTENT: {"description": "Datos invalidos"},
+    },
+)
+async def logout(payload: RefreshRequest, session: SessionDep) -> Response:
+    """Cierra la sesion asociada al refresh token."""
+    await auth_service.logout(session, refresh_token=payload.refresh_token)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(
