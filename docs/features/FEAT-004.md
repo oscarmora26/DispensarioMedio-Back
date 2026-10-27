@@ -1,5 +1,11 @@
 # FEAT-004 — Gestión de usuarios: CRUD, roles y restablecimiento de contraseña
 
+> **Nota de vigencia (2026-10-27).** El riesgo **R-4** ("restablecer la contraseña no revoca tokens
+> vigentes") queda **superado por [FEAT-020](FEAT-020.md)** (refresh tokens,
+> [ADR-0002](../adr/0002-refresh-tokens.md)): `reset-password` y la desactivación de un usuario revocan ahora
+> todas sus sesiones dentro de la misma transacción del cambio. El resto del contrato de `/users` sigue
+> vigente.
+
 **Estado:** `approved` (aprobada explícitamente por el humano el 2026-10-21)
 **Fecha:** 2026-10-21
 **Alcance:** `GET/POST /api/v1/users`, `GET/PUT/DELETE /api/v1/users/{user_id}` y `POST /api/v1/users/{user_id}/reset-password`, exclusivamente para `ADMIN`, reutilizando la autenticación, el envelope de error y el hash Argon2id de FEAT-002.

@@ -1,5 +1,13 @@
 # FEAT-002 — Autenticación JWT: login, sesión y cambio de contraseña
 
+> **Nota de vigencia (2026-10-27).** La decisión **D-3** ("sin revocación: cambiar la contraseña no invalida
+> tokens"), el riesgo **R-1** (token robado válido hasta `exp`) y la regla 14 de este documento quedan
+> **superados por [FEAT-020](FEAT-020.md)** (refresh tokens, [ADR-0002](../adr/0002-refresh-tokens.md)):
+> `change-password` ahora revoca todas las sesiones del usuario, el login devuelve además `refresh_token` y
+> `refresh_expires_in`, existen `POST /auth/refresh` y `POST /auth/logout`, y la vigencia por defecto del
+> access token pasó de 30 a **15 minutos**. El resto del contrato (envelope de error, rate limiting, claims del
+> JWT, `create-admin`) sigue vigente.
+
 **Estado:** `approved` (aprobada explícitamente por el humano el 2026-10-21, alcance acotado a autenticación)
 **Fecha:** 2026-10-21
 **Alcance:** `POST /api/v1/auth/login`, `GET /api/v1/auth/me`, `POST /api/v1/auth/change-password`, emisión/validación de JWT, hash Argon2id, dependencias de autorización reutilizables, rate limiting del login y CLI `create-admin`.
