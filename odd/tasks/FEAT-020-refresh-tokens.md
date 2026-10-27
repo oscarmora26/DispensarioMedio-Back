@@ -18,7 +18,7 @@ Feature aprobada por el humano el 2026-10-27 (P-1…P-4). Spec ejecutiva: `docs/
 
 | ID | Tarea | Specs | Ruta | Commit |
 |---|---|---|---|---|
-| T1 | Config + `.env.example` (default 15 min, `refresh_token_expire_days`) | S1 | inline | f8afbdd (config); `.env.example` bloqueado |
+| T1 | Config + `.env.example` (default 15 min, `refresh_token_expire_days`) | S1 | inline | f8afbdd (config) + 50a2b50 (`.env.example`, edición humana) |
 | T2 | Modelo `RefreshToken` + migración Alembic | S2 | inline | f8afbdd |
 | T3 | Helpers de seguridad + `refresh_token_repository` | S3 | inline | f8afbdd |
 | T4 | Schemas + `auth_service` (login dual, refresh, logout) + rutas | S4, S5, S6, S8 | inline | 21f8764 |
@@ -37,3 +37,4 @@ Feature aprobada por el humano el 2026-10-27 (P-1…P-4). Spec ejecutiva: `docs/
 - **L2** (2026-10-27, aprobación): P-1 aprobar e iniciar (revierte ADR-003); P-2 "15 min / 30 días"; P-3 "Body JSON"; P-4 "Logout + cascada".
 - **L4** (2026-10-27, cierre de review): la validación dirigida del predecesor quedó inalcanzable porque el candidato cambió de alcance; recuperación `scope_changed` autorizada por el proveedor y registrada, sucesor `review-07d5ac54168269ab` con el árbol actual (`d94fdd84`, 1937 líneas) → revisor `review-risk` devolvió **`approved`** con un `WARNING`/informational sin corrección. Reconocimiento ejecutado: autoridad quemada (`gentle-ai.review-acknowledged/v1`).
 - **L3** (2026-10-27, cierre de implementación): 7 commits (`c9e7c8f`, `f8afbdd`, `21f8764`, `df168b7`, `26259cd`, `d13b2c1`, `fd06c6c`). Gates: ruff limpio, `alembic check` limpio, **778 passed**. **Pendiente humano**: (1) editar `.env.example` (`JWT_EXPIRE_MINUTES=15`, `REFRESH_TOKEN_EXPIRE_DAYS=30`), único motivo de los 2 rojos; (2) decidir el destino de la autoridad de review parkeada en `targeted_validation_required`.
+- **L5** (2026-10-27, cierre): edición humana de `.env.example` commiteada en `50a2b50`. Suite **780 passed**, gates limpios. `assess` del incremento (`baseRef 85991eb`): `reviewDue: false` (`under_budget`). FEAT-020 en `done`. Primer intento humano dejó `JWT_EXPIRE_MINUTES` duplicado en `30`; verificado y corregido en el segundo. Resta solo push/PR del humano.
