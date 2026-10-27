@@ -23,7 +23,8 @@ Cada rama parte de la anterior. Los commits ya existen; no se reescribio histori
 | 7 | `feat/FEAT-017-shelves-cells` | `feat/FEAT-016-busqueda-acentos` | `0191268` | 50 archivos, +2718 / -2445 |
 | 8 | `feat/FEAT-017-api-separada` | `feat/FEAT-017-shelves-cells` | `9364c31` | 20 archivos, +2345 / -546 |
 | 9 | `feat/docs-stack-y-vigencia` | `feat/FEAT-017-api-separada` | `9687684` | 9 archivos, +docs (solo documentacion) |
-| 10 | `feat/FEAT-018-doctor-user` | `feat/docs-stack-y-vigencia` | (nuevo) | `user` de solo lectura en `/doctors` |
+| 10 | `feat/FEAT-018-doctor-user` | `feat/docs-stack-y-vigencia` | `f7ee56b` | 8 archivos: `user` de solo lectura en `/doctors` |
+| 11 | `feat/FEAT-019-visitas-permisos` | `feat/FEAT-018-doctor-user` | `4d2a8c2` | 11 archivos: ADMIN solo lectura en visitas, MEDICO escribe las propias |
 
 ### Foco de revision por PR
 
@@ -38,6 +39,8 @@ Cada rama parte de la anterior. Los commits ya existen; no se reescribio histori
 | 7 | Modelos `shelves`/`cells`, migracion de datos, `medications.cell_id`, contrato de `/shelves` |
 | 8 | Separacion de `/cells`, validaciones de posicion y `PUT /cells` (fix de `updated_at`) |
 | 9 | Plan de PRs encadenados y notas de vigencia en las specs historicas (sin codigo) |
+| 10 | Exposicion de la cuenta del medico en `/doctors` (solo lectura, sin email) |
+| 11 | Inversion de permisos de visitas: **modifica RF-12**; revisar con foco en autorizacion y filtro de propiedad |
 
 ## Comandos (a ejecutar por el humano)
 
