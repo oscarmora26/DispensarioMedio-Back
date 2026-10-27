@@ -18,6 +18,7 @@ from app.schemas.doctor import (
     DoctorListResponse,
     DoctorRead,
     DoctorUpdate,
+    DoctorUserRead,
 )
 
 logger = structlog.get_logger(__name__)
@@ -57,7 +58,8 @@ def calculate_pages(total: int, size: int) -> int:
 
 
 def _to_read(doctor: Doctor) -> DoctorRead:
-    """Build the single doctor shape from the ORM entity (D-2)."""
+    """Build the single doctor shape from the ORM entity (D-2, FEAT-018)."""
+    account = doctor.user
     return DoctorRead(
         id=doctor.id,
         name=doctor.name,
@@ -65,6 +67,7 @@ def _to_read(doctor: Doctor) -> DoctorRead:
         lab_shift=doctor.lab_shift,
         specialty=doctor.specialty,
         is_active=doctor.is_active,
+        user=DoctorUserRead.model_validate(account) if account is not None else None,
     )
 
 
@@ -236,7 +239,7 @@ async def create_doctor(
     await _commit(session)
 
     logger.info("doctor.created", doctor_id=doctor.id, actor_id=actor.id)
-    return _to_read(doctor)
+    return _to_read(await _get_doctor_or_404(session, doctor.id))
 
 
 async def update_doctor(
@@ -258,7 +261,7 @@ async def update_doctor(
     deactivated = was_active and not doctor.is_active
     event = "doctor.deactivated" if deactivated else "doctor.updated"
     logger.info(event, doctor_id=doctor.id, actor_id=actor.id)
-    return _to_read(doctor)
+    return _to_read(await _get_doctor_or_404(session, doctor.id))
 
 
 async def deactivate_doctor(

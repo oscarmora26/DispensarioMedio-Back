@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.doctor import Doctor
 from app.models.visit import Visit
@@ -23,7 +24,9 @@ SORT_COLUMNS = {
 
 async def get_doctor_by_id(session: AsyncSession, doctor_id: int) -> Doctor | None:
     """Busca un medico por identificador."""
-    result = await session.execute(select(Doctor).where(Doctor.id == doctor_id))
+    result = await session.execute(
+        select(Doctor).options(selectinload(Doctor.user)).where(Doctor.id == doctor_id)
+    )
     return result.scalar_one_or_none()
 
 
@@ -111,7 +114,7 @@ async def list_doctors(
     total_result = await session.execute(select(func.count(Doctor.id)).where(*conditions))
     total = int(total_result.scalar_one())
 
-    statement = select(Doctor).where(*conditions)
+    statement = select(Doctor).options(selectinload(Doctor.user)).where(*conditions)
     statement = _ordered(statement, sort_field=sort_field, sort_desc=sort_desc)
     result = await session.execute(statement.limit(size).offset((page - 1) * size))
     return list(result.scalars().all()), total

@@ -18,6 +18,7 @@ from app.schemas.doctor import (
     DoctorCreate,
     DoctorRead,
     DoctorUpdate,
+    DoctorUserRead,
 )
 from app.services.doctor_service import calculate_pages, parse_sort
 
@@ -212,8 +213,8 @@ def test_ca5_calculate_pages_and_ca11_sort_catalog() -> None:
     assert invalid.value.errors[0]["field"] == "sort"
 
 
-def test_read_serializes_exactly_six_keys() -> None:
-    """CA-14/D-2: la forma de lectura es plana con exactamente seis claves."""
+def test_read_serializes_exactly_seven_keys() -> None:
+    """CA-14/D-2 + FEAT-018: la lectura es plana con `user` como unica anidada."""
     read = DoctorRead(
         id=5,
         name="Dra. Ana Pérez",
@@ -222,4 +223,21 @@ def test_read_serializes_exactly_six_keys() -> None:
         specialty="Medicina General",
         is_active=True,
     )
-    assert set(read.model_dump()) == {"id", "name", "cedula", "lab_shift", "specialty", "is_active"}
+    assert set(read.model_dump()) == {
+        "id",
+        "name",
+        "cedula",
+        "lab_shift",
+        "specialty",
+        "is_active",
+        "user",
+    }
+    # Sin cuenta asociada el campo viaja explicito como `null`.
+    assert read.user is None
+
+
+def test_doctor_user_read_exposes_only_three_keys() -> None:
+    """FEAT-018: el resumen del usuario no filtra email, rol ni hash."""
+    account = DoctorUserRead(id=7, username="ana", is_active=True)
+
+    assert set(account.model_dump()) == {"id", "username", "is_active"}

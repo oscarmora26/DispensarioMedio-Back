@@ -21,7 +21,7 @@ from tests.users_support import assert_error_envelope, error_fields
 
 DOCTORS_PATH = "/api/v1/doctors"
 
-#: Claves exactas de `DoctorRead` (FEAT-012 D-2).
+#: Claves exactas de `DoctorRead` (FEAT-012 D-2 + FEAT-018 `user`).
 ITEM_KEYS = {
     "id",
     "name",
@@ -29,10 +29,11 @@ ITEM_KEYS = {
     "lab_shift",
     "specialty",
     "is_active",
+    "user",
 }
 
 #: Claves que nunca deben aparecer en una respuesta con medico.
-FORBIDDEN_KEYS = {"created_at", "updated_at", "visits", "user"}
+FORBIDDEN_KEYS = {"created_at", "updated_at", "visits"}
 
 __all__ = [
     "DOCTORS_PATH",

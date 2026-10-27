@@ -85,8 +85,22 @@ class DoctorUpdate(_DoctorFields):
     is_active: bool = Field(description="Estado resultante del médico")
 
 
+class DoctorUserRead(BaseModel):
+    """Resumen de solo lectura de la cuenta asociada al medico (FEAT-018).
+
+    Deliberadamente minimal: `email`, `password_hash` y `role` no se exponen
+    porque esta vista es de administracion del medico, no del usuario.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    is_active: bool
+
+
 class DoctorRead(BaseModel):
-    """Single doctor shape (D-2): exactly six flat fields."""
+    """Single doctor shape: six flat fields plus the read-only account link."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -96,6 +110,7 @@ class DoctorRead(BaseModel):
     lab_shift: str
     specialty: str
     is_active: bool
+    user: DoctorUserRead | None = None
 
 
 class DoctorListResponse(BaseModel):

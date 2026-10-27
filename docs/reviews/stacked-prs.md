@@ -23,6 +23,7 @@ Cada rama parte de la anterior. Los commits ya existen; no se reescribio histori
 | 7 | `feat/FEAT-017-shelves-cells` | `feat/FEAT-016-busqueda-acentos` | `0191268` | 50 archivos, +2718 / -2445 |
 | 8 | `feat/FEAT-017-api-separada` | `feat/FEAT-017-shelves-cells` | `9364c31` | 20 archivos, +2345 / -546 |
 | 9 | `feat/docs-stack-y-vigencia` | `feat/FEAT-017-api-separada` | `9687684` | 9 archivos, +docs (solo documentacion) |
+| 10 | `feat/FEAT-018-doctor-user` | `feat/docs-stack-y-vigencia` | (nuevo) | `user` de solo lectura en `/doctors` |
 
 ### Foco de revision por PR
 
