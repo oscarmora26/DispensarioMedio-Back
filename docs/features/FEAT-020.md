@@ -185,3 +185,4 @@
 |---|---|
 | 2026-10-27 | Propuesta registrada como `proposed` a pedido del humano ("Realiza la propuesta para la implementacion"). |
 | 2026-10-27 | **Aprobada explícitamente por el humano** con P-1…P-4 (reversión de la decisión de FEAT-002; 15 min/30 días; body JSON; logout + cascada). Spec ejecutiva: reglas 1–35, D-1…D-11, CA-1…CA-30. |
+| 2026-10-27 | Implementada en la rama `feat/FEAT-020-refresh-tokens`. **Estrategia de slices**: `c9e7c8f` propuesta + spec, `f8afbdd` esquema de `refresh_tokens` y primitivas del token opaco, `21f8764` flujo completo (login dual, refresh, logout, cascada), `df168b7` ADR-0002 y notas de vigencia. Gates: `ruff check`/`format --check` limpios, `alembic check` sin diferencias, **775 tests en verde** y 2 en rojo por `.env.example` (bloqueado por la política de rutas del harness: falta `JWT_EXPIRE_MINUTES=15` y `REFRESH_TOKEN_EXPIRE_DAYS=30`). **Pendiente humano**: esa edición de `.env.example`. |

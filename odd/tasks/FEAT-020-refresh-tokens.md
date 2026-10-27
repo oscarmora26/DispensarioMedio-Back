@@ -18,14 +18,14 @@ Feature aprobada por el humano el 2026-10-27 (P-1…P-4). Spec ejecutiva: `docs/
 
 | ID | Tarea | Specs | Ruta | Commit |
 |---|---|---|---|---|
-| T1 | Config + `.env.example` (default 15 min, `refresh_token_expire_days`) | S1 | inline | pendiente |
-| T2 | Modelo `RefreshToken` + migración Alembic | S2 | inline | pendiente |
-| T3 | Helpers de seguridad + `refresh_token_repository` | S3 | inline | pendiente |
-| T4 | Schemas + `auth_service` (login dual, refresh, logout) + rutas | S4, S5, S6, S8 | inline | pendiente |
-| T5 | Cascada en `change_password`, `reset_password`, `deactivate_user` | S7 | inline | pendiente |
-| T6 | Tests del flujo completo (CA-1…CA-30) | S4–S7 | inline (test-first donde aplica) | pendiente |
-| T7 | ADR-0002 + notas de vigencia FEAT-002/FEAT-004 | S9 | inline | pendiente |
-| T8 | Gates (ruff, alembic check, pytest), commits, verificación independiente | todas | inline | pendiente |
+| T1 | Config + `.env.example` (default 15 min, `refresh_token_expire_days`) | S1 | inline | f8afbdd (config); `.env.example` bloqueado |
+| T2 | Modelo `RefreshToken` + migración Alembic | S2 | inline | f8afbdd |
+| T3 | Helpers de seguridad + `refresh_token_repository` | S3 | inline | f8afbdd |
+| T4 | Schemas + `auth_service` (login dual, refresh, logout) + rutas | S4, S5, S6, S8 | inline | 21f8764 |
+| T5 | Cascada en `change_password`, `reset_password`, `deactivate_user` | S7 | inline | 21f8764 |
+| T6 | Tests del flujo completo (CA-1…CA-30) | S4–S7 | inline (test-first donde aplica) | 21f8764 |
+| T7 | ADR-0002 + notas de vigencia FEAT-002/FEAT-004 | S9 | inline | df168b7 |
+| T8 | Gates (ruff, alembic check, pytest), commits, verificación independiente | todas | inline | 775 verdes; 2 rojos por `.env.example` |
 
 ## Log
 
