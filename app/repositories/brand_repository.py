@@ -51,7 +51,9 @@ def _list_conditions(*, search: str | None, is_active: bool | None) -> list[obje
     conditions: list[object] = []
     if search:
         pattern = f"%{escape_like(search)}%"
-        conditions.append(Brand.description.ilike(pattern, escape="\\"))
+        conditions.append(
+            func.unaccent(Brand.description).ilike(func.unaccent(pattern), escape="\\")
+        )
     if is_active is not None:
         conditions.append(Brand.is_active.is_(is_active))
     return conditions

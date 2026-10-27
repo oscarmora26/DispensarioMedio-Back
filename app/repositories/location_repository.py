@@ -63,10 +63,10 @@ def _list_conditions(*, search: str | None, is_active: bool | None) -> list[obje
         pattern = f"%{escape_like(search)}%"
         conditions.append(
             or_(
-                Location.description.ilike(pattern, escape="\\"),
-                Location.shelf.ilike(pattern, escape="\\"),
-                Location.section.ilike(pattern, escape="\\"),
-                Location.cell.ilike(pattern, escape="\\"),
+                func.unaccent(Location.description).ilike(func.unaccent(pattern), escape="\\"),
+                func.unaccent(Location.shelf).ilike(func.unaccent(pattern), escape="\\"),
+                func.unaccent(Location.section).ilike(func.unaccent(pattern), escape="\\"),
+                func.unaccent(Location.cell).ilike(func.unaccent(pattern), escape="\\"),
             )
         )
     if is_active is not None:

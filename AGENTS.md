@@ -82,7 +82,7 @@ Flujo de dependencias: `routes → services → repositories → models`. Un rou
 
 1. `feature-list.md` es la única fuente de verdad del backlog.
 2. Estados: `proposed`, `approved`, `in_progress`, `in_review`, `changes_requested`, `done`, `blocked`, `rejected`.
-3. **Solo el humano aprueba** `proposed → approved`.
+3. **Necesitas confirmacion del humano para mover de estos estados** `proposed → approved`.
 4. El team-lead ejecuta únicamente features `approved`.
 5. **Una feature a la vez**: nada de trabajo paralelo sobre el mismo código.
 6. Solo el team-lead escribe estados en `feature-list.md`.

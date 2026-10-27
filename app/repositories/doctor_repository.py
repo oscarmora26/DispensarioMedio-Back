@@ -64,8 +64,8 @@ def _list_conditions(
         pattern = f"%{escape_like(search)}%"
         conditions.append(
             or_(
-                Doctor.name.ilike(pattern, escape="\\"),
-                Doctor.cedula.ilike(pattern, escape="\\"),
+                func.unaccent(Doctor.name).ilike(func.unaccent(pattern), escape="\\"),
+                func.unaccent(Doctor.cedula).ilike(func.unaccent(pattern), escape="\\"),
             )
         )
     if is_active is not None:

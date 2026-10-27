@@ -154,6 +154,7 @@ EXPECTED_REVISION_ORDER = [
     "clinical_schema",
     "audit_schema",
     "seed_roles",
+    "unaccent_extension",
 ]
 
 EXPECTED_RELATIONSHIPS = {
@@ -607,7 +608,7 @@ def test_seed_sql_is_idempotent_by_construction() -> None:
 def test_ca06_migration_set_is_a_single_linear_chain() -> None:
     """CA-6: 6 revisiones, una sola cabeza y el orden de la spec."""
     modules = migration_modules()
-    assert len(modules) == 6
+    assert len(modules) == 7
 
     bases = [module for module in modules.values() if module.down_revision is None]
     assert len(bases) == 1
@@ -632,7 +633,7 @@ def test_ca06_migration_set_is_a_single_linear_chain() -> None:
     assert messages == EXPECTED_REVISION_ORDER
 
     files = sorted(VERSIONS_DIR.glob("*.py"))
-    assert len(files) == 6
+    assert len(files) == 7
     messages_by_file = []
     for path in files:
         source = path.read_text(encoding="utf-8")

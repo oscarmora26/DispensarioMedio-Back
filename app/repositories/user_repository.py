@@ -93,8 +93,8 @@ def _list_conditions(*, search: str | None, is_active: bool | None) -> list[obje
         pattern = f"%{escape_like(search)}%"
         conditions.append(
             or_(
-                User.username.ilike(pattern, escape="\\"),
-                User.email.ilike(pattern, escape="\\"),
+                func.unaccent(User.username).ilike(func.unaccent(pattern), escape="\\"),
+                func.unaccent(User.email).ilike(func.unaccent(pattern), escape="\\"),
             )
         )
     if is_active is not None:

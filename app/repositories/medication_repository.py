@@ -71,8 +71,8 @@ def _list_conditions(
         pattern = f"%{escape_like(search)}%"
         conditions.append(
             or_(
-                Medication.description.ilike(pattern, escape="\\"),
-                Medication.dose.ilike(pattern, escape="\\"),
+                func.unaccent(Medication.description).ilike(func.unaccent(pattern), escape="\\"),
+                func.unaccent(Medication.dose).ilike(func.unaccent(pattern), escape="\\"),
             )
         )
     if is_active is not None:

@@ -10,5 +10,15 @@
     { "action": "tool.use", "resource": "shell:git push *", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:git push --force *", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:gh pr merge *", "effect": "deny" }
-  ]
+  ],
+  "mcp": {
+    "postgres": {
+      "type": "local",
+      "command": ["docker", "run", "-i", "--rm", "-e", "DATABASE_URI",
+                  "crystaldba/postgres-mcp", "--access-mode=restricted"],
+      "environment": { "DATABASE_URI": "postgresql://dispensario:dispensario@localhost:5433/dispensario" },
+      "enabled": true,
+      "timeout": 60000
+    }
+  }
 }

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 class DrugType(UpdatedAtMixin, Base):
-    """Tipo o familia farmacologica de un medicamento."""
+    """Forma de presentacion de un medicamento (pastilla, capsula, jarabe)."""
 
     __tablename__ = "drug_types"
     __table_args__ = (UniqueConstraint("description", name="uq_drug_types_description"),)

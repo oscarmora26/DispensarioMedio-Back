@@ -12,12 +12,17 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
+from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
+
+# Carga `.env` para que TEST_DATABASE_URL documentada en `.env.example` llegue a
+# os.environ. Sin override: una variable de entorno real siempre tiene prioridad.
+load_dotenv()
 
 Params = Mapping[str, Any]
 
