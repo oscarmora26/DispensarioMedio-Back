@@ -172,7 +172,8 @@ async def read_current_user(user: CurrentUser) -> MeResponse:
     summary="Cambiar la contrasena propia",
     description=(
         "Cambia la contrasena del usuario del token. Requiere la contrasena actual. "
-        "La contrasena anterior deja de autenticar; los tokens vigentes no se revocan."
+        "La contrasena anterior deja de autenticar y se revocan todas las sesiones abiertas "
+        "del usuario."
     ),
     responses={
         status.HTTP_400_BAD_REQUEST: {"description": "Contrasena actual incorrecta o sin cambios"},

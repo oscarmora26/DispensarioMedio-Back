@@ -191,7 +191,8 @@ async def delete_user(
     summary="Restablecer contrasena",
     description=(
         "Reemplaza la contrasena de un usuario, este o no activo, sin exigir la actual. "
-        "No reactiva la cuenta ni revoca los tokens vigentes. Solo accesible para ADMIN."
+        "No reactiva la cuenta, pero revoca todas las sesiones abiertas del usuario. "
+        "Solo accesible para ADMIN."
     ),
     responses={
         **_COMMON_RESPONSES,

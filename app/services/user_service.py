@@ -344,6 +344,14 @@ async def update_user(
     user.doctor_id = payload.doctor_id
     user.is_active = payload.is_active
     _touch(user)
+    if was_active and not user.is_active:
+        # Cascada: la desactivacion por PUT tambien cierra las sesiones (regla 27).
+        await refresh_token_repository.revoke_all_for_user(
+            session,
+            user_id=user.id,
+            reason="user_deactivated",
+            now=datetime.now(UTC),
+        )
     await _commit(session)
 
     event = "user.deactivated" if was_active and not user.is_active else "user.updated"

@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
 import itertools
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
-from app.core.security import hash_refresh_token
+from app.core.exceptions import UnauthorizedError
+from app.core.security import generate_refresh_token, hash_refresh_token
+from app.services import auth_service
+from app.services.auth_service import RefreshResult
 from tests.auth_support import (
     DEFAULT_PASSWORD,
     LOGIN_PATH,
@@ -20,7 +26,8 @@ from tests.auth_support import (
     create_auth_user,
     token_payload,
 )
-from tests.db_support import unique_suffix
+from tests.db_support import get_role_id, resolve_test_database_url, unique_suffix
+from tests.users_support import admin_actor, put_body, user_path
 
 REFRESH_PATH = "/api/v1/auth/refresh"
 LOGOUT_PATH = "/api/v1/auth/logout"
@@ -407,21 +414,79 @@ async def test_ca13_reuse_outside_grace_revokes_the_family(
     assert all(row["revoked_at"] is not None for row in rows)
 
 
-async def test_ca14_concurrent_refresh_produces_a_single_successor(
-    auth_client: AsyncClient, db_conn: AsyncConnection
-) -> None:
-    """CA-14: dos refrescos seguidos del mismo token dejan un solo sucesor."""
+async def test_ca14_concurrent_refresh_produces_a_single_successor() -> None:
+    """CA-14 (D-5): dos refrescos simultaneos del mismo token dejan un solo sucesor.
+
+    Cada refresco corre en su propia conexion (motor propio con `NullPool`): el
+    `SELECT ... FOR UPDATE` de la rotacion solo se ejerce entre transacciones
+    reales, asi que dos peticiones simultaneas deben serializarse en la base y
+    no en el event loop. Sin el bloqueo ambas rotarian y dejarian dos sucesores.
+    """
+    plain_token = generate_refresh_token()
     username = f"user_{unique_suffix()}"
-    user_id = await create_auth_user(db_conn, username=username)
-    session = await login(auth_client, username)
+    engines = [
+        create_async_engine(resolve_test_database_url(), poolclass=NullPool) for _ in range(2)
+    ]
+    setup_engine = engines[0]
+    barrier = asyncio.Barrier(len(engines))
+    user_id: int | None = None
 
-    first = await refresh(auth_client, session["refresh_token"])
-    second = await refresh(auth_client, session["refresh_token"])
-    rows = await fetch_tokens(db_conn, user_id)
+    try:
+        async with setup_engine.begin() as conn:
+            user_id = await create_auth_user(conn, username=username)
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO refresh_tokens
+                        (user_id, token_hash, family_id, expires_at, created_by_ip, user_agent)
+                    VALUES (:user_id, :token_hash, :family_id, :expires_at, '127.0.0.1', 'pytest')
+                    """
+                ),
+                {
+                    "user_id": user_id,
+                    "token_hash": hash_refresh_token(plain_token),
+                    "family_id": uuid.uuid4(),
+                    "expires_at": datetime.now(UTC) + timedelta(days=1),
+                },
+            )
 
-    assert first.status_code == 200
-    assert second.status_code == 401
-    assert len(rows) == 2
+        async def rotate(engine: AsyncEngine) -> Any:
+            async with AsyncSession(bind=engine, expire_on_commit=False) as rotate_session:
+                await barrier.wait()
+                try:
+                    return await auth_service.refresh(rotate_session, refresh_token=plain_token)
+                except UnauthorizedError as exc:
+                    return exc
+
+        results = await asyncio.gather(*(rotate(engine) for engine in engines))
+
+        async with setup_engine.connect() as conn:
+            rows = await fetch_tokens(conn, user_id)
+
+        successes = [item for item in results if isinstance(item, RefreshResult)]
+        rejections = [item for item in results if isinstance(item, UnauthorizedError)]
+
+        assert len(successes) == 1
+        assert len(rejections) == 1
+        assert rejections[0].code == "invalid_token"
+        assert len(rows) == 2
+        assert sum(1 for row in rows if row["replaced_by_id"] is not None) == 1
+        assert rows[0]["replaced_by_id"] == rows[1]["id"]
+    finally:
+        if user_id is not None:
+            async with setup_engine.begin() as conn:
+                # `replaced_by_id` es RESTRICT: se rompe el eslabon antes de borrar.
+                await conn.execute(
+                    text("UPDATE refresh_tokens SET replaced_by_id = NULL WHERE user_id = :uid"),
+                    {"uid": user_id},
+                )
+                await conn.execute(
+                    text("DELETE FROM refresh_tokens WHERE user_id = :uid"),
+                    {"uid": user_id},
+                )
+                await conn.execute(text("DELETE FROM users WHERE id = :uid"), {"uid": user_id})
+        for engine in engines:
+            await engine.dispose()
 
 
 async def test_ca15_inactive_user_cannot_refresh_and_family_dies(
@@ -636,6 +701,77 @@ async def test_ca24_deactivation_revokes_sessions_and_blocks_access(
     assert all(row["revoked_reason"] == "user_deactivated" for row in rows)
     assert refresh_after.status_code == 401
     assert me_after.status_code == 403
+
+
+async def test_ca24b_put_deactivation_revokes_every_session(
+    auth_client: AsyncClient, db_conn: AsyncConnection
+) -> None:
+    """Regla 27: desactivar por `PUT /users/{id}` tambien revoca las sesiones."""
+    tag = unique_suffix()
+    target_name = f"user_{tag}"
+    target_email = f"{tag}@example.test"
+    target_id = await create_auth_user(
+        db_conn, username=target_name, email=target_email, role="MEDICO"
+    )
+    await login(auth_client, target_name)
+    await login(auth_client, target_name)
+    _, admin_headers = await admin_actor(db_conn)
+    medico_role_id = await get_role_id(db_conn, "MEDICO")
+
+    response = await auth_client.put(
+        user_path(target_id),
+        headers=admin_headers,
+        json=put_body(
+            username=target_name,
+            email=target_email,
+            role_id=medico_role_id,
+            doctor_id=None,
+            is_active=False,
+        ),
+    )
+    rows = await fetch_tokens(db_conn, target_id)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["is_active"] is False
+    assert len(rows) == 2
+    assert [row["revoked_reason"] for row in rows] == [
+        "user_deactivated",
+        "user_deactivated",
+    ]
+    assert all(row["revoked_at"] is not None for row in rows)
+
+
+async def test_ca24c_put_update_without_deactivation_keeps_sessions_alive(
+    auth_client: AsyncClient, db_conn: AsyncConnection
+) -> None:
+    """Regla 27: un PUT que mantiene la cuenta activa no revoca nada."""
+    tag = unique_suffix()
+    target_name = f"user_{tag}"
+    target_email = f"{tag}@example.test"
+    target_id = await create_auth_user(
+        db_conn, username=target_name, email=target_email, role="MEDICO"
+    )
+    await login(auth_client, target_name)
+    _, admin_headers = await admin_actor(db_conn)
+    medico_role_id = await get_role_id(db_conn, "MEDICO")
+    before = await fetch_tokens(db_conn, target_id)
+
+    response = await auth_client.put(
+        user_path(target_id),
+        headers=admin_headers,
+        json=put_body(
+            username=target_name,
+            email=target_email,
+            role_id=medico_role_id,
+            doctor_id=None,
+            is_active=True,
+        ),
+    )
+    after = await fetch_tokens(db_conn, target_id)
+
+    assert response.status_code == 200, response.text
+    assert [row["revoked_at"] for row in after] == [row["revoked_at"] for row in before]
+    assert all(row["revoked_reason"] is None for row in after)
 
 
 async def test_ca25_deactivating_an_inactive_user_is_idempotent(
