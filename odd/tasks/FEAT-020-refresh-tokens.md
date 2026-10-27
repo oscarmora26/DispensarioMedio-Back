@@ -26,8 +26,13 @@ Feature aprobada por el humano el 2026-10-27 (P-1…P-4). Spec ejecutiva: `docs/
 | T6 | Tests del flujo completo (CA-1…CA-30) | S4–S7 | inline (test-first donde aplica) | 21f8764 |
 | T7 | ADR-0002 + notas de vigencia FEAT-002/FEAT-004 | S9 | inline | df168b7 |
 | T8 | Gates (ruff, alembic check, pytest), commits, verificación independiente | todas | inline | 775 verdes; 2 rojos por `.env.example` |
+| T9 | Review nativa (`review-b3f56e1087841b93`) | todas | facade | BLOCKER R1-001 corregido (`d13b2c1`) |
+| T10 | Corrección acotada R1-001 (plan 16 líneas, 20 reales) | regla 23 | inline | `d13b2c1` |
+| T11 | Hallazgos del verificador (cascada PUT, mensajes, CA-14 real) | reglas 23/27 | worker `mvr597li-2-4epz` | `fd06c6c` |
+| T12 | Validación dirigida de la review | — | facade | **bloqueada**: binding rechazado 2 veces |
 
 ## Log
 
 - **L1** (2026-10-27, pedido original del humano): "Realiza la propuesta para la implementacion".
 - **L2** (2026-10-27, aprobación): P-1 aprobar e iniciar (revierte ADR-003); P-2 "15 min / 30 días"; P-3 "Body JSON"; P-4 "Logout + cascada".
+- **L3** (2026-10-27, cierre de implementación): 7 commits (`c9e7c8f`, `f8afbdd`, `21f8764`, `df168b7`, `26259cd`, `d13b2c1`, `fd06c6c`). Gates: ruff limpio, `alembic check` limpio, **778 passed**. **Pendiente humano**: (1) editar `.env.example` (`JWT_EXPIRE_MINUTES=15`, `REFRESH_TOKEN_EXPIRE_DAYS=30`), único motivo de los 2 rojos; (2) decidir el destino de la autoridad de review parkeada en `targeted_validation_required`.
