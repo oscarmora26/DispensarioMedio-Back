@@ -1,5 +1,10 @@
 # FEAT-013 — Registro y gestión de visitas: registrar, listar, detalle, editar y anular
 
+> **Nota de vigencia (2026-10-27).** Esta especificación describe el contrato tal como se aprobó en su
+> fecha. Desde **FEAT-019** los permisos de escritura de visitas se invirtieron: el `ADMIN` pasó a
+> **solo lectura** (se modificó RF-12) y el `MEDICO` realiza todas las acciones sobre **sus propias**
+> visitas. El contrato vigente está en [FEAT-019](FEAT-019.md).
+
 **Estado:** `approved` (aprobada explícitamente por el humano el 2026-10-24, en bloque con FEAT-011…FEAT-014)
 **Fecha:** 2026-10-24
 **Alcance:** `POST/GET /api/v1/visits`, `GET/PUT /api/v1/visits/{visit_id}`, `POST /api/v1/visits/{visit_id}/annul`, con lectura y registro para `ADMIN` y `MEDICO` (el médico solo sus propias visitas, US-31) y edición/anulación solo para `ADMIN`, reutilizando autenticación JWT, envelope `{detail, code, errors}` de FEAT-002/FEAT-004 y los catálogos de FEAT-010 (medicamentos), FEAT-011 (pacientes) y FEAT-012 (médicos).

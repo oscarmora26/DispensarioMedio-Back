@@ -28,7 +28,7 @@ router = APIRouter(prefix="/visits", tags=["visits"])
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 ReaderUser = Annotated[User, Depends(require_role("ADMIN", "MEDICO"))]
-AdminUser = Annotated[User, Depends(require_role("ADMIN"))]
+MedicoUser = Annotated[User, Depends(require_role("MEDICO"))]
 
 _COMMON_RESPONSES = {
     status.HTTP_401_UNAUTHORIZED: {"description": "No autenticado o token invalido"},
@@ -121,9 +121,9 @@ async def list_visits(
     summary="Registrar una visita",
     description=(
         "Registra la atencion de un paciente por un medico con fecha no futura, "
-        "sintomas obligatorios y medicamentos activos opcionales. Con token MEDICO "
-        "el medico se obtiene del token y no se puede indicar otro; con token ADMIN "
-        "doctor_id es obligatorio. Accesible para ADMIN y MEDICO."
+        "sintomas obligatorios y medicamentos activos opcionales. El medico se "
+        "obtiene del token y no se puede indicar otro. Solo accesible para MEDICO; "
+        "el ADMIN solo puede leer visitas (FEAT-019)."
     ),
     responses={
         **_COMMON_RESPONSES,
@@ -135,7 +135,7 @@ async def list_visits(
 )
 async def create_visit(
     session: SessionDep,
-    actor: ReaderUser,
+    actor: MedicoUser,
     payload: VisitCreate,
 ) -> VisitRead:
     """Register a visit."""
@@ -174,8 +174,9 @@ async def get_visit(
     description=(
         "Reemplazo completo de doctor_id, patient_id, visited_at, symptoms, "
         "recommendations y medications: la lista de medicamentos enviada sustituye "
-        "a la anterior. Una visita anulada no se puede editar (409 visit_annulled). "
-        "Solo accesible para ADMIN."
+        "a la anterior. Una visita anulada no se puede editar (409 visit_annulled); "
+        "una visita de otro medico responde 404. Solo accesible para MEDICO, y solo "
+        "sobre sus propias visitas (FEAT-019)."
     ),
     responses={
         **_COMMON_RESPONSES,
@@ -190,7 +191,7 @@ async def update_visit(
     visit_id: int,
     payload: VisitUpdate,
     session: SessionDep,
-    actor: AdminUser,
+    actor: MedicoUser,
 ) -> VisitRead:
     """Replace the editable fields of a visit."""
     return await visit_service.update_visit(
@@ -208,7 +209,7 @@ async def update_visit(
     description=(
         "Anula una visita una sola vez, guardando el usuario, la fecha y el motivo "
         "de la anulacion. Repetir la anulacion responde 409 visit_already_annulled. "
-        "Solo accesible para ADMIN."
+        "Solo accesible para MEDICO, y solo sobre sus propias visitas (FEAT-019)."
     ),
     responses={
         **_COMMON_RESPONSES,
@@ -221,7 +222,7 @@ async def annul_visit(
     visit_id: int,
     payload: VisitAnnulRequest,
     session: SessionDep,
-    actor: AdminUser,
+    actor: MedicoUser,
 ) -> VisitAnnulResponse:
     """Annull a visit."""
     return await visit_service.annul_visit(

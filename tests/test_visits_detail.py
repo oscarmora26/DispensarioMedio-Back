@@ -1,4 +1,8 @@
-"""Detalle de visitas de FEAT-013 (CA-23 y CA-24)."""
+"""Detalle de visitas de FEAT-013 bajo el contrato de FEAT-019 (CA-23 y CA-24).
+
+El `ADMIN` sigue leyendo cualquier visita; el `MEDICO` solo las propias y una
+visita ajena responde 404.
+"""
 
 from __future__ import annotations
 
@@ -17,11 +21,10 @@ from tests.visits_support import (
     annul_path,
     assert_error_envelope,
     create_medication_row,
-    doctor_row,
-    medico_actor,
     nonexistent_visit_id,
     patient_row,
     register_visit,
+    visit_owner_actor,
     visit_path,
 )
 
@@ -30,15 +33,14 @@ async def test_ca23_detail_returns_d7_shape_with_medications(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """CA-23: el detalle trae la forma D-7 con los medicamentos de la visita."""
-    admin_id, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    actor_id, doctor_id, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
     medication_id = await create_medication_row(db_conn, description="Amoxicilina", dose="500 mg")
     visit_id = await register_visit(
         db_conn,
         doctor_id=doctor_id,
         patient_id=patient_id,
-        created_by=admin_id,
+        created_by=actor_id,
         symptoms="Dolor de garganta",
         recommendations="Reposo e hidratación",
         medications=[(medication_id, 2, "Cada 8 horas")],
@@ -58,7 +60,7 @@ async def test_ca23_detail_returns_d7_shape_with_medications(
     assert body["patient"]["id"] == patient_id
     assert body["symptoms"] == "Dolor de garganta"
     assert body["recommendations"] == "Reposo e hidratación"
-    assert body["created_by"] == admin_id
+    assert body["created_by"] == actor_id
 
     assert len(body["medications"]) == 1
     medication = body["medications"][0]
@@ -74,14 +76,13 @@ async def test_ca23_annulled_visit_detail_includes_annulment_fields(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """CA-23: una visita anulada expone `annulled_at`, `annulled_by` y el motivo."""
-    admin_id, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    actor_id, doctor_id, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
     visit_id = await register_visit(
         db_conn,
         doctor_id=doctor_id,
         patient_id=patient_id,
-        created_by=admin_id,
+        created_by=actor_id,
     )
 
     annulled = await auth_client.post(
@@ -97,7 +98,7 @@ async def test_ca23_annulled_visit_detail_includes_annulment_fields(
 
     assert set(body) == DETAIL_KEYS | ANNULLED_KEYS
     assert body["status"] == "ANULADA"
-    assert body["annulled_by"] == admin_id
+    assert body["annulled_by"] == actor_id
     assert body["annulment_reason"] == "Visita registrada por error"
     assert body["annulled_at"] == annulled.json()["annulled_at"]
 
@@ -106,7 +107,7 @@ async def test_ca24_missing_and_invalid_identifiers(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """CA-24: visita inexistente ⇒ 404 `visit_not_found`; id no entero ⇒ 422."""
-    _, headers = await admin_actor(db_conn)
+    _, _, headers = await visit_owner_actor(db_conn)
 
     missing = await auth_client.get(
         visit_path(await nonexistent_visit_id(db_conn)), headers=headers
@@ -118,28 +119,26 @@ async def test_ca24_missing_and_invalid_identifiers(
     assert_error_envelope(invalid, 422, "validation_error")
 
 
-async def test_ca24_medico_gets_404_for_foreign_visit(
+async def test_ca24_medico_gets_404_for_foreign_visit_and_admin_still_reads_it(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
-    """CA-24: para `MEDICO` una visita ajena (exista o no) responde 404."""
-    admin_id, _ = await admin_actor(db_conn)
-    own_doctor = await doctor_row(db_conn)
-    other_doctor = await doctor_row(db_conn)
+    """CA-24: para `MEDICO` una visita ajena (exista o no) responde 404; ADMIN la lee."""
+    owner_id, own_doctor, headers = await visit_owner_actor(db_conn)
+    other_id, other_doctor, other_headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
     own_visit = await register_visit(
         db_conn,
         doctor_id=own_doctor,
         patient_id=patient_id,
-        created_by=admin_id,
+        created_by=owner_id,
     )
     foreign_visit = await register_visit(
         db_conn,
         doctor_id=other_doctor,
         patient_id=patient_id,
-        created_by=admin_id,
+        created_by=other_id,
     )
 
-    _, headers = await medico_actor(db_conn, doctor_id=own_doctor)
     own = await auth_client.get(visit_path(own_visit), headers=headers)
     assert own.status_code == 200, own.text
 
@@ -147,7 +146,16 @@ async def test_ca24_medico_gets_404_for_foreign_visit(
     body = assert_error_envelope(foreign, 404, "visit_not_found")
     assert body["detail"] == "La visita no existe"
 
+    other_reads = await auth_client.get(visit_path(foreign_visit), headers=other_headers)
+    assert other_reads.status_code == 200, other_reads.text
+    assert other_reads.json()["doctor"]["id"] == other_doctor
+
     missing = await auth_client.get(
         visit_path(await nonexistent_visit_id(db_conn)), headers=headers
     )
     assert_error_envelope(missing, 404, "visit_not_found")
+
+    _, admin_headers = await admin_actor(db_conn)
+    admin_reads = await auth_client.get(visit_path(foreign_visit), headers=admin_headers)
+    assert admin_reads.status_code == 200, admin_reads.text
+    assert admin_reads.json()["doctor"]["id"] == other_doctor

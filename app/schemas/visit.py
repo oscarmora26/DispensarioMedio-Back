@@ -82,7 +82,7 @@ class _VisitFields(BaseModel):
 
     doctor_id: int | None = Field(
         default=None,
-        description="Medico de la visita; obligatorio para ADMIN y tomado del token para MEDICO",
+        description="Medico de la visita; siempre se toma del token y no se puede elegir",
     )
     patient_id: int | None = Field(
         default=None,

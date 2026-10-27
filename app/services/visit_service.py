@@ -28,7 +28,6 @@ from app.schemas.visit import (
     DOCTOR_FILTER_FORBIDDEN_MESSAGE,
     DOCTOR_FROM_TOKEN_MESSAGE,
     DOCTOR_INACTIVE_MESSAGE,
-    DOCTOR_REQUIRED_MESSAGE,
     DUPLICATE_MEDICATION_MESSAGE,
     INSTRUCTIONS_MAX_LENGTH,
     INSTRUCTIONS_MAX_MESSAGE,
@@ -190,21 +189,33 @@ def _symptoms_or_422(value: str | None) -> str:
     return value
 
 
+def _ensure_ownership(actor: User, visit: Visit) -> None:
+    """Hide visits that do not belong to the acting doctor (FEAT-019).
+
+    Un `MEDICO` solo opera sobre sus propias visitas: cualquier otra responde
+    `404` con el mismo codigo que una visita inexistente, para no revelar la
+    existencia de visitas ajenas (misma regla que el detalle).
+    """
+    if actor.role.name == "MEDICO" and visit.doctor_id != actor.doctor_id:
+        raise NotFoundError(VISIT_NOT_FOUND_MESSAGE, code="visit_not_found")
+
+
 async def _resolve_doctor(
     session: AsyncSession,
     *,
     actor: User,
     doctor_id: int | None,
 ) -> Doctor:
-    """Resolve the visit doctor from the token (`MEDICO`) or the body (`ADMIN`)."""
-    if actor.role.name == "MEDICO":
-        if doctor_id is not None and doctor_id != actor.doctor_id:
-            raise _invalid("doctor_id", DOCTOR_FROM_TOKEN_MESSAGE)
-        if actor.doctor_id is None:
-            raise ForbiddenError(DOCTOR_NOT_ASSOCIATED_MESSAGE, code="doctor_not_associated")
-        doctor_id = actor.doctor_id
-    elif doctor_id is None:
-        raise _invalid("doctor_id", DOCTOR_REQUIRED_MESSAGE)
+    """Resolve the visit doctor from the token (FEAT-019: only `MEDICO` writes).
+
+    El medico nunca se elige por body: si el payload trae un `doctor_id` distinto
+    al del token se rechaza, y la visita queda siempre del medico autenticado.
+    """
+    if doctor_id is not None and doctor_id != actor.doctor_id:
+        raise _invalid("doctor_id", DOCTOR_FROM_TOKEN_MESSAGE)
+    if actor.doctor_id is None:
+        raise ForbiddenError(DOCTOR_NOT_ASSOCIATED_MESSAGE, code="doctor_not_associated")
+    doctor_id = actor.doctor_id
 
     doctor = await doctor_repository.get_doctor_by_id(session, doctor_id)
     if doctor is None:
@@ -390,8 +401,7 @@ async def get_visit(session: AsyncSession, *, actor: User, visit_id: int) -> Vis
     if visit is None:
         raise NotFoundError(VISIT_NOT_FOUND_MESSAGE, code="visit_not_found")
 
-    if actor.role.name == "MEDICO" and visit.doctor_id != actor.doctor_id:
-        raise NotFoundError(VISIT_NOT_FOUND_MESSAGE, code="visit_not_found")
+    _ensure_ownership(actor, visit)
 
     medications = {detail.medication_id: detail.medication for detail in visit.visit_medications}
     return _to_read(
@@ -445,6 +455,7 @@ async def update_visit(
     visit = await visit_repository.get_visit_by_id(session, visit_id, with_medications=True)
     if visit is None:
         raise NotFoundError(VISIT_NOT_FOUND_MESSAGE, code="visit_not_found")
+    _ensure_ownership(actor, visit)
     if visit.status == VISIT_STATUS_ANNULLED:
         raise ConflictError(VISIT_ANNULLED_MESSAGE, code="visit_annulled")
 
@@ -486,6 +497,7 @@ async def annul_visit(
     visit = await visit_repository.get_visit_by_id(session, visit_id)
     if visit is None:
         raise NotFoundError(VISIT_NOT_FOUND_MESSAGE, code="visit_not_found")
+    _ensure_ownership(actor, visit)
     if visit.status == VISIT_STATUS_ANNULLED:
         raise ConflictError(VISIT_ALREADY_ANNULLED_MESSAGE, code="visit_already_annulled")
 

@@ -1,4 +1,4 @@
-"""Utilidades de apoyo para los tests de FEAT-013 (visitas)."""
+"""Utilidades de apoyo para los tests de visitas (FEAT-013, autorizacion FEAT-019)."""
 
 from __future__ import annotations
 
@@ -90,7 +90,9 @@ __all__ = [
     "register_visit",
     "unique_cedula",
     "unique_suffix",
+    "unlinked_medico_actor",
     "visit_body",
+    "visit_owner_actor",
     "visit_path",
 ]
 
@@ -189,6 +191,34 @@ async def patient_row(
             {"patient_id": patient_id},
         )
     return patient_id
+
+
+async def visit_owner_actor(
+    conn: AsyncConnection,
+    *,
+    doctor_is_active: bool = True,
+    is_active: bool = True,
+) -> tuple[int, int, dict[str, str]]:
+    """Crea un MEDICO dueño de sus visitas y devuelve `(user_id, doctor_id, headers)`.
+
+    El medico de la visita sale del usuario (FEAT-019), asi que la visita de este
+    actor le pertenece. Llamarlo dos veces produce dos medicos con sendos
+    usuarios, util para el caso de "visita de otro medico".
+    """
+    doctor_id = await doctor_row(conn, is_active=doctor_is_active)
+    user_id, headers = await medico_actor(conn, doctor_id=doctor_id, is_active=is_active)
+    return user_id, doctor_id, headers
+
+
+async def unlinked_medico_actor(
+    conn: AsyncConnection, *, is_active: bool = True
+) -> tuple[int, dict[str, str]]:
+    """Crea un MEDICO sin `doctor_id` asociado y devuelve su id y cabeceras.
+
+    Ese usuario no puede registrar visitas: `POST` responde `403`
+    `doctor_not_associated` (FEAT-019 CA-6).
+    """
+    return await medico_actor(conn, is_active=is_active)
 
 
 async def create_medication_row(

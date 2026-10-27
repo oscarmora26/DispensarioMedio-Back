@@ -1,4 +1,8 @@
-"""Edicion de visitas de FEAT-013 (CA-25 a CA-28, D-10 y D-11)."""
+"""Edicion de visitas de FEAT-013 bajo el contrato de FEAT-019 (CA-25 a CA-28).
+
+El `MEDICO` dueño es el unico que puede editar: el medico de la visita sale del
+token y no se puede reasignar por body.
+"""
 
 from __future__ import annotations
 
@@ -18,18 +22,17 @@ from app.schemas.visit import (
 from tests.visits_support import (
     DETAIL_KEYS,
     VISITS_PATH,
-    admin_actor,
     annul_path,
     assert_error_envelope,
     assert_field_error,
     create_medication_row,
-    doctor_row,
     fetch_visit_medication_rows,
     fetch_visit_row,
     past_visited_at,
     patient_row,
     register_visit,
     visit_body,
+    visit_owner_actor,
     visit_path,
 )
 
@@ -42,10 +45,12 @@ def _iso(value: datetime) -> str:
 async def test_ca25_full_put_preserves_created_at_and_refreshes_updated_at(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
-    """CA-25: `PUT` completo reemplaza los campos y conserva `created_at`/`created_by`."""
-    admin_id, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
-    new_doctor_id = await doctor_row(db_conn)
+    """CA-25: `PUT` completo reemplaza los campos y conserva `created_at`/`created_by`.
+
+    El medico no se puede cambiar por body (FEAT-019 R-3): la visita sigue siendo
+    del medico del token.
+    """
+    actor_id, doctor_id, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
     new_patient_id = await patient_row(db_conn)
 
@@ -53,7 +58,7 @@ async def test_ca25_full_put_preserves_created_at_and_refreshes_updated_at(
         VISITS_PATH,
         headers=headers,
         json=visit_body(
-            doctor_id=doctor_id,
+            doctor_id=None,
             patient_id=patient_id,
             symptoms="Síntomas iniciales",
         ),
@@ -66,7 +71,7 @@ async def test_ca25_full_put_preserves_created_at_and_refreshes_updated_at(
         visit_path(original["id"]),
         headers=headers,
         json=visit_body(
-            doctor_id=new_doctor_id,
+            doctor_id=None,
             patient_id=new_patient_id,
             visited_at=_iso(updated_at_instant),
             symptoms="Síntomas corregidos",
@@ -78,12 +83,12 @@ async def test_ca25_full_put_preserves_created_at_and_refreshes_updated_at(
 
     assert set(body) == DETAIL_KEYS
     assert body["id"] == original["id"]
-    assert body["created_by"] == admin_id
+    assert body["created_by"] == actor_id
     assert datetime.fromisoformat(body["created_at"]) == datetime.fromisoformat(
         original["created_at"]
     )
     assert datetime.fromisoformat(body["updated_at"]) > datetime.fromisoformat(body["created_at"])
-    assert body["doctor"]["id"] == new_doctor_id
+    assert body["doctor"]["id"] == doctor_id
     assert body["patient"]["id"] == new_patient_id
     assert datetime.fromisoformat(body["visited_at"]) == updated_at_instant
     assert body["symptoms"] == "Síntomas corregidos"
@@ -92,10 +97,10 @@ async def test_ca25_full_put_preserves_created_at_and_refreshes_updated_at(
 
     row = await fetch_visit_row(db_conn, original["id"])
     assert row is not None
-    assert row["doctor_id"] == new_doctor_id
+    assert row["doctor_id"] == doctor_id
     assert row["patient_id"] == new_patient_id
     assert row["symptoms"] == "Síntomas corregidos"
-    assert row["created_by"] == admin_id
+    assert row["created_by"] == actor_id
     assert row["created_at"] == datetime.fromisoformat(original["created_at"])
 
 
@@ -103,8 +108,7 @@ async def test_ca26_put_replaces_the_medication_list(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """CA-26: los detalles retirados se borran y la lista enviada sustituye a la anterior."""
-    _, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    _, _, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
     first = await create_medication_row(db_conn, description="Ibuprofeno")
     second = await create_medication_row(db_conn, description="Paracetamol")
@@ -113,7 +117,7 @@ async def test_ca26_put_replaces_the_medication_list(
         VISITS_PATH,
         headers=headers,
         json=visit_body(
-            doctor_id=doctor_id,
+            doctor_id=None,
             patient_id=patient_id,
             medications=[{"medication_id": first}, {"medication_id": second}],
         ),
@@ -126,7 +130,7 @@ async def test_ca26_put_replaces_the_medication_list(
         visit_path(visit_id),
         headers=headers,
         json=visit_body(
-            doctor_id=doctor_id,
+            doctor_id=None,
             patient_id=patient_id,
             medications=[{"medication_id": second, "quantity": 3, "instructions": "Cada 12 horas"}],
         ),
@@ -142,7 +146,6 @@ async def test_ca26_put_replaces_the_medication_list(
         visit_path(visit_id),
         headers=headers,
         json={
-            "doctor_id": doctor_id,
             "patient_id": patient_id,
             "visited_at": past_visited_at(),
             "symptoms": "Sin medicamentos",
@@ -157,14 +160,13 @@ async def test_ca27_put_of_annulled_visit_is_conflict_without_changes(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """CA-27: `PUT` sobre una visita anulada ⇒ 409 `visit_annulled` sin cambios."""
-    admin_id, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    actor_id, doctor_id, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
     visit_id = await register_visit(
         db_conn,
         doctor_id=doctor_id,
         patient_id=patient_id,
-        created_by=admin_id,
+        created_by=actor_id,
     )
     annulled = await auth_client.post(
         annul_path(visit_id),
@@ -178,7 +180,7 @@ async def test_ca27_put_of_annulled_visit_is_conflict_without_changes(
         visit_path(visit_id),
         headers=headers,
         json=visit_body(
-            doctor_id=doctor_id,
+            doctor_id=None,
             patient_id=patient_id,
             symptoms="Intento de edición",
         ),
@@ -191,26 +193,23 @@ async def test_ca27_put_of_annulled_visit_is_conflict_without_changes(
 async def test_ca28_partial_body_is_rejected_field_by_field(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
-    """CA-28: un body parcial ⇒ 422 con el campo ausente y mensaje de campo."""
-    admin_id, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    """CA-28: un body parcial ⇒ 422 con el campo ausente; `doctor_id` ya no es obligatorio."""
+    actor_id, doctor_id, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
     visit_id = await register_visit(
         db_conn,
         doctor_id=doctor_id,
         patient_id=patient_id,
-        created_by=admin_id,
+        created_by=actor_id,
     )
     before = await fetch_visit_row(db_conn, visit_id)
 
     full = {
-        "doctor_id": doctor_id,
         "patient_id": patient_id,
         "visited_at": past_visited_at(),
         "symptoms": "Dolor de cabeza",
     }
     expectations = {
-        "doctor_id": "El médico es obligatorio",
         "patient_id": PATIENT_REQUIRED_MESSAGE,
         "visited_at": VISITED_AT_REQUIRED_MESSAGE,
         "symptoms": SYMPTOMS_RANGE_MESSAGE,
@@ -222,13 +221,16 @@ async def test_ca28_partial_body_is_rejected_field_by_field(
 
     assert await fetch_visit_row(db_conn, visit_id) == before
 
+    accepted = await auth_client.put(visit_path(visit_id), headers=headers, json=full)
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["doctor"]["id"] == doctor_id
+
 
 async def test_ca28_put_applies_the_same_validations_as_post(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """CA-28: las validaciones 6-14 se aplican igual en `PUT`."""
-    admin_id, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    actor_id, doctor_id, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
     inactive_patient = await patient_row(db_conn, is_active=False)
     medication_id = await create_medication_row(db_conn)
@@ -236,7 +238,7 @@ async def test_ca28_put_applies_the_same_validations_as_post(
         db_conn,
         doctor_id=doctor_id,
         patient_id=patient_id,
-        created_by=admin_id,
+        created_by=actor_id,
     )
     before = await fetch_visit_row(db_conn, visit_id)
 
@@ -245,7 +247,7 @@ async def test_ca28_put_applies_the_same_validations_as_post(
         visit_path(visit_id),
         headers=headers,
         json=visit_body(
-            doctor_id=doctor_id,
+            doctor_id=None,
             patient_id=patient_id,
             visited_at=future,
         ),
@@ -257,7 +259,7 @@ async def test_ca28_put_applies_the_same_validations_as_post(
     rejected_patient = await auth_client.put(
         visit_path(visit_id),
         headers=headers,
-        json=visit_body(doctor_id=doctor_id, patient_id=inactive_patient),
+        json=visit_body(doctor_id=None, patient_id=inactive_patient),
     )
     assert_field_error(
         rejected_patient, 422, "validation_error", "patient_id", PATIENT_INACTIVE_MESSAGE
@@ -267,7 +269,7 @@ async def test_ca28_put_applies_the_same_validations_as_post(
         visit_path(visit_id),
         headers=headers,
         json=visit_body(
-            doctor_id=doctor_id,
+            doctor_id=None,
             patient_id=patient_id,
             medications=[{"medication_id": medication_id}, {"medication_id": medication_id}],
         ),

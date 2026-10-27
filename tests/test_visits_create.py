@@ -1,4 +1,8 @@
-"""Registro de visitas de FEAT-013 (CA-4 a CA-15 y CA-33)."""
+"""Registro de visitas de FEAT-013 con el contrato de FEAT-019 (CA-4 a CA-15 y CA-33).
+
+El `MEDICO` es el unico rol que escribe visitas: el medico se obtiene siempre del
+token y la visita queda a su nombre.
+"""
 
 from __future__ import annotations
 
@@ -11,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from app.schemas.visit import (
     DOCTOR_FROM_TOKEN_MESSAGE,
     DOCTOR_INACTIVE_MESSAGE,
-    DOCTOR_REQUIRED_MESSAGE,
     DUPLICATE_MEDICATION_MESSAGE,
     INSTRUCTIONS_MAX_MESSAGE,
     MEDICATION_INACTIVE_MESSAGE,
@@ -31,7 +34,6 @@ from tests.visits_support import (
     MEDICATION_KEYS,
     PATIENT_REF_KEYS,
     VISITS_PATH,
-    admin_actor,
     assert_error_envelope,
     assert_field_error,
     count_visits,
@@ -39,10 +41,12 @@ from tests.visits_support import (
     doctor_row,
     fetch_visit_medication_rows,
     fetch_visit_row,
-    medico_actor,
     past_visited_at,
     patient_row,
+    register_visit,
+    unlinked_medico_actor,
     visit_body,
+    visit_owner_actor,
     visit_path,
 )
 
@@ -51,9 +55,8 @@ async def test_ca4_medico_registers_with_its_own_doctor(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """CA-4: con `MEDICO` el `doctor_id` es el del token y otro valor ⇒ 422."""
-    doctor_id = await doctor_row(db_conn)
+    medico_id, doctor_id, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
-    medico_id, headers = await medico_actor(db_conn, doctor_id=doctor_id)
 
     created = await auth_client.post(
         VISITS_PATH,
@@ -85,7 +88,7 @@ async def test_ca5_medico_without_associated_doctor_is_forbidden(
 ) -> None:
     """CA-5: `MEDICO` sin medico asociado ⇒ `403` `doctor_not_associated`."""
     patient_id = await patient_row(db_conn)
-    _, headers = await medico_actor(db_conn)
+    _, headers = await unlinked_medico_actor(db_conn)
 
     response = await auth_client.post(
         VISITS_PATH,
@@ -97,87 +100,49 @@ async def test_ca5_medico_without_associated_doctor_is_forbidden(
     assert await count_visits(db_conn) == 0
 
 
-async def test_ca6_admin_needs_a_valid_active_doctor(
+async def test_ca6_medico_with_inactive_doctor_cannot_write(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
-    """CA-6: `ADMIN` sin `doctor_id` ⇒ 422; inexistente ⇒ 404; inactivo ⇒ 422."""
-    _, headers = await admin_actor(db_conn)
+    """CA-6: D-5 el medico inactivo del token no registra ni edita visitas (422)."""
+    owner_id, doctor_id, headers = await visit_owner_actor(db_conn, doctor_is_active=False)
     patient_id = await patient_row(db_conn)
 
-    missing = await auth_client.post(
+    rejected = await auth_client.post(
         VISITS_PATH,
         headers=headers,
         json=visit_body(doctor_id=None, patient_id=patient_id),
     )
-    assert_field_error(missing, 422, "validation_error", "doctor_id", DOCTOR_REQUIRED_MESSAGE)
-
-    nonexistent_id = await doctor_row(db_conn)
-    nonexistent = await auth_client.post(
-        VISITS_PATH,
-        headers=headers,
-        json=visit_body(doctor_id=nonexistent_id + 10_000, patient_id=patient_id),
-    )
-    assert_error_envelope(nonexistent, 404, "doctor_not_found")
-
-    inactive_id = await doctor_row(db_conn, is_active=False)
-    inactive = await auth_client.post(
-        VISITS_PATH,
-        headers=headers,
-        json=visit_body(doctor_id=inactive_id, patient_id=patient_id),
-    )
-    assert_field_error(inactive, 422, "validation_error", "doctor_id", DOCTOR_INACTIVE_MESSAGE)
+    assert_field_error(rejected, 422, "validation_error", "doctor_id", DOCTOR_INACTIVE_MESSAGE)
     assert await count_visits(db_conn) == 0
 
-    valid_doctor_id = await doctor_row(db_conn)
-    created = await auth_client.post(
-        VISITS_PATH,
-        headers=headers,
-        json=visit_body(doctor_id=valid_doctor_id, patient_id=patient_id),
+    visit_id = await register_visit(
+        db_conn,
+        doctor_id=doctor_id,
+        patient_id=patient_id,
+        created_by=owner_id,
     )
-    assert created.status_code == 201, created.text
-
-    put_missing = await auth_client.put(
-        visit_path(created.json()["id"]),
+    before = await fetch_visit_row(db_conn, visit_id)
+    updated = await auth_client.put(
+        visit_path(visit_id),
         headers=headers,
-        json={
-            "patient_id": patient_id,
-            "visited_at": past_visited_at(),
-            "symptoms": "Dolor de cabeza",
-        },
+        json=visit_body(doctor_id=None, patient_id=patient_id, symptoms="Otros síntomas"),
     )
-    assert_field_error(put_missing, 422, "validation_error", "doctor_id", DOCTOR_REQUIRED_MESSAGE)
-
-
-async def test_ca6_medico_with_inactive_doctor_cannot_register(
-    auth_client: AsyncClient, db_conn: AsyncConnection
-) -> None:
-    """D-5: el medico inactivo del token no recibe visitas nuevas (422)."""
-    doctor_id = await doctor_row(db_conn, is_active=False)
-    patient_id = await patient_row(db_conn)
-    _, headers = await medico_actor(db_conn, doctor_id=doctor_id)
-
-    response = await auth_client.post(
-        VISITS_PATH,
-        headers=headers,
-        json=visit_body(doctor_id=None, patient_id=patient_id),
-    )
-    assert_field_error(response, 422, "validation_error", "doctor_id", DOCTOR_INACTIVE_MESSAGE)
-    assert await count_visits(db_conn) == 0
+    assert_field_error(updated, 422, "validation_error", "doctor_id", DOCTOR_INACTIVE_MESSAGE)
+    assert await fetch_visit_row(db_conn, visit_id) == before
 
 
 async def test_ca7_visited_at_cannot_be_in_the_future(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """CA-7: `visited_at` futura ⇒ 422; pasada (incluido hoy) ⇒ aceptada."""
-    _, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    _, _, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
 
     future = (datetime.now(UTC) + timedelta(hours=2)).isoformat()
     rejected = await auth_client.post(
         VISITS_PATH,
         headers=headers,
-        json=visit_body(doctor_id=doctor_id, patient_id=patient_id, visited_at=future),
+        json=visit_body(doctor_id=None, patient_id=patient_id, visited_at=future),
     )
     assert_field_error(rejected, 422, "validation_error", "visited_at", VISITED_AT_FUTURE_MESSAGE)
 
@@ -186,7 +151,7 @@ async def test_ca7_visited_at_cannot_be_in_the_future(
             VISITS_PATH,
             headers=headers,
             json=visit_body(
-                doctor_id=doctor_id,
+                doctor_id=None,
                 patient_id=patient_id,
                 visited_at=past_visited_at(minutes),
             ),
@@ -198,8 +163,7 @@ async def test_ca7_naive_visited_at_is_assumed_in_santo_domingo(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """D-3: una `visited_at` sin zona se interpreta en `America/Santo_Domingo`."""
-    _, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    _, _, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
     naive_value = (datetime.now(UTC) - timedelta(hours=5)).replace(tzinfo=None, microsecond=0)
     expected = naive_value.replace(tzinfo=UTC) + timedelta(hours=4)
@@ -208,7 +172,7 @@ async def test_ca7_naive_visited_at_is_assumed_in_santo_domingo(
         VISITS_PATH,
         headers=headers,
         json=visit_body(
-            doctor_id=doctor_id,
+            doctor_id=None,
             patient_id=patient_id,
             visited_at=naive_value.isoformat(),
         ),
@@ -224,22 +188,21 @@ async def test_ca8_symptoms_length_is_enforced(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """CA-8: `symptoms` vacio o <3 ⇒ 422 de rango; >2000 ⇒ 422 de maximo."""
-    _, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    _, _, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
 
     for invalid in ("", "   ", "ab"):
         rejected = await auth_client.post(
             VISITS_PATH,
             headers=headers,
-            json=visit_body(doctor_id=doctor_id, patient_id=patient_id, symptoms=invalid),
+            json=visit_body(doctor_id=None, patient_id=patient_id, symptoms=invalid),
         )
         assert_field_error(rejected, 422, "validation_error", "symptoms", SYMPTOMS_RANGE_MESSAGE)
 
     too_long = await auth_client.post(
         VISITS_PATH,
         headers=headers,
-        json=visit_body(doctor_id=doctor_id, patient_id=patient_id, symptoms="a" * 2001),
+        json=visit_body(doctor_id=None, patient_id=patient_id, symptoms="a" * 2001),
     )
     assert_field_error(too_long, 422, "validation_error", "symptoms", SYMPTOMS_MAX_MESSAGE)
 
@@ -247,7 +210,6 @@ async def test_ca8_symptoms_length_is_enforced(
         VISITS_PATH,
         headers=headers,
         json={
-            "doctor_id": doctor_id,
             "patient_id": patient_id,
             "visited_at": past_visited_at(),
         },
@@ -258,7 +220,7 @@ async def test_ca8_symptoms_length_is_enforced(
         created = await auth_client.post(
             VISITS_PATH,
             headers=headers,
-            json=visit_body(doctor_id=doctor_id, patient_id=patient_id, symptoms=accepted),
+            json=visit_body(doctor_id=None, patient_id=patient_id, symptoms=accepted),
         )
         assert created.status_code == 201, created.text
         assert created.json()["symptoms"] == accepted.strip()
@@ -268,11 +230,10 @@ async def test_ca9_ca14_recommendations_optional_and_bounded(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """CA-9/CA-14: ausente o de solo espacios ⇒ `null`; >2000 ⇒ 422; ≤2000 ok."""
-    _, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    _, _, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
 
-    body_without = visit_body(doctor_id=doctor_id, patient_id=patient_id)
+    body_without = visit_body(doctor_id=None, patient_id=patient_id)
     body_without.pop("recommendations")
     absent = await auth_client.post(VISITS_PATH, headers=headers, json=body_without)
     assert absent.status_code == 201, absent.text
@@ -281,7 +242,7 @@ async def test_ca9_ca14_recommendations_optional_and_bounded(
     blank = await auth_client.post(
         VISITS_PATH,
         headers=headers,
-        json=visit_body(doctor_id=doctor_id, patient_id=patient_id, recommendations="    "),
+        json=visit_body(doctor_id=None, patient_id=patient_id, recommendations="    "),
     )
     assert blank.status_code == 201, blank.text
     assert blank.json()["recommendations"] is None
@@ -292,7 +253,7 @@ async def test_ca9_ca14_recommendations_optional_and_bounded(
         VISITS_PATH,
         headers=headers,
         json=visit_body(
-            doctor_id=doctor_id,
+            doctor_id=None,
             patient_id=patient_id,
             recommendations="a" * 2001,
         ),
@@ -305,7 +266,7 @@ async def test_ca9_ca14_recommendations_optional_and_bounded(
         VISITS_PATH,
         headers=headers,
         json=visit_body(
-            doctor_id=doctor_id,
+            doctor_id=None,
             patient_id=patient_id,
             recommendations="a" * 2000,
         ),
@@ -318,13 +279,12 @@ async def test_ca10_patient_must_exist_and_be_active(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """CA-10: paciente inexistente ⇒ 404; inactivo ⇒ 422 en `patient_id`."""
-    _, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    _, _, headers = await visit_owner_actor(db_conn)
 
     nonexistent = await auth_client.post(
         VISITS_PATH,
         headers=headers,
-        json=visit_body(doctor_id=doctor_id, patient_id=await nonexistent_patient_id(db_conn)),
+        json=visit_body(doctor_id=None, patient_id=await nonexistent_patient_id(db_conn)),
     )
     assert_error_envelope(nonexistent, 404, "patient_not_found")
 
@@ -332,7 +292,7 @@ async def test_ca10_patient_must_exist_and_be_active(
     inactive = await auth_client.post(
         VISITS_PATH,
         headers=headers,
-        json=visit_body(doctor_id=doctor_id, patient_id=inactive_id),
+        json=visit_body(doctor_id=None, patient_id=inactive_id),
     )
     assert_field_error(inactive, 422, "validation_error", "patient_id", PATIENT_INACTIVE_MESSAGE)
     assert await count_visits(db_conn) == 0
@@ -342,14 +302,13 @@ async def test_ca11_medications_must_exist_be_active_and_be_valid(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """CA-11: medicamento inexistente/inactivo, duplicado, cantidad e instrucciones."""
-    _, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    _, _, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
     medication_id = await create_medication_row(db_conn)
 
     def body(*medications: dict[str, object]) -> dict[str, object]:
         return visit_body(
-            doctor_id=doctor_id,
+            doctor_id=None,
             patient_id=patient_id,
             medications=list(medications),
         )
@@ -412,14 +371,13 @@ async def test_ca12_create_without_medications_returns_the_detail_shape(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """CA-12: `POST` valido sin medicamentos ⇒ 201 con la forma D-7."""
-    actor_id, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    actor_id, doctor_id, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
 
     created = await auth_client.post(
         VISITS_PATH,
         headers=headers,
-        json=visit_body(doctor_id=doctor_id, patient_id=patient_id),
+        json=visit_body(doctor_id=None, patient_id=patient_id),
     )
     assert created.status_code == 201, created.text
     body = created.json()
@@ -446,8 +404,7 @@ async def test_ca13_create_with_medications_persists_the_details(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """CA-13: `POST` con medicamentos devuelve y guarda los detalles."""
-    _, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    _, _, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
     first = await create_medication_row(db_conn, description="Ibuprofeno", dose="400 mg")
     second = await create_medication_row(db_conn, description="Paracetamol", dose="500 mg")
@@ -456,7 +413,7 @@ async def test_ca13_create_with_medications_persists_the_details(
         VISITS_PATH,
         headers=headers,
         json=visit_body(
-            doctor_id=doctor_id,
+            doctor_id=None,
             patient_id=patient_id,
             medications=[
                 {"medication_id": first, "quantity": 2, "instructions": "Cada 8 horas"},
@@ -490,14 +447,13 @@ async def test_ca15_response_never_includes_annulment_fields(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
     """CA-15: una visita recien registrada no expone los campos de anulacion."""
-    _, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    _, _, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
 
     created = await auth_client.post(
         VISITS_PATH,
         headers=headers,
-        json=visit_body(doctor_id=doctor_id, patient_id=patient_id),
+        json=visit_body(doctor_id=None, patient_id=patient_id),
     )
     assert created.status_code == 201, created.text
     assert set(created.json()) & ANNULLED_KEYS == set()
@@ -515,8 +471,7 @@ async def test_ca33_unique_violation_at_commit_is_translated_and_session_stays_u
     `0.004` pasa la validacion de la API pero PostgreSQL lo ajusta a `0.00` en
     `NUMERIC(10,2)`, de modo que la constraint se viola en la base (D-9).
     """
-    _, headers = await admin_actor(db_conn)
-    doctor_id = await doctor_row(db_conn)
+    _, _, headers = await visit_owner_actor(db_conn)
     patient_id = await patient_row(db_conn)
     medication_id = await create_medication_row(db_conn)
 
@@ -524,7 +479,7 @@ async def test_ca33_unique_violation_at_commit_is_translated_and_session_stays_u
         VISITS_PATH,
         headers=headers,
         json=visit_body(
-            doctor_id=doctor_id,
+            doctor_id=None,
             patient_id=patient_id,
             medications=[{"medication_id": medication_id, "quantity": 0.004}],
         ),
@@ -540,7 +495,7 @@ async def test_ca33_unique_violation_at_commit_is_translated_and_session_stays_u
         VISITS_PATH,
         headers=headers,
         json=visit_body(
-            doctor_id=doctor_id,
+            doctor_id=None,
             patient_id=patient_id,
             medications=[{"medication_id": medication_id, "quantity": 1}],
         ),

@@ -82,6 +82,8 @@ async def test_ca17_filters_and_combinations(
 ) -> None:
     """CA-17: `doctor_id`, `patient_id`, `status`, `medication_id` y `AND`."""
     admin_id, headers = await admin_actor(db_conn)
+    # FEAT-019: la anulacion la firma un usuario MEDICO, ya no un ADMIN.
+    annuller_id, _ = await medico_actor(db_conn)
     first_doctor = await doctor_row(db_conn)
     second_doctor = await doctor_row(db_conn)
     first_patient = await patient_row(db_conn)
@@ -107,7 +109,7 @@ async def test_ca17_filters_and_combinations(
         patient_id=second_patient,
         created_by=admin_id,
     )
-    await annul_visit_row(db_conn, third, annulled_by=admin_id)
+    await annul_visit_row(db_conn, third, annulled_by=annuller_id)
 
     by_doctor = await auth_client.get(
         VISITS_PATH, headers=headers, params={"doctor_id": first_doctor}

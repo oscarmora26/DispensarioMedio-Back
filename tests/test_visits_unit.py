@@ -277,3 +277,18 @@ def test_ca35_openapi_documents_the_five_operations() -> None:
         if parameter["name"] == "status"
     )
     assert status_parameter["schema"]["anyOf"][0]["pattern"] == VISIT_STATUS_PATTERN
+
+
+def test_ca35_write_descriptions_do_not_advertise_admin_writes() -> None:
+    """CA-35/FEAT-019: las tres escrituras se documentan como exclusivas de MEDICO."""
+    paths = app.openapi()["paths"]
+    write_operations = [
+        (VISITS_OPENAPI_PATH, "post"),
+        (VISIT_OPENAPI_PATH, "put"),
+        (ANNUL_OPENAPI_PATH, "post"),
+    ]
+    for path, method in write_operations:
+        description = paths[path][method]["description"]
+        assert "MEDICO" in description, (path, method)
+        for stale in ("Accesible para ADMIN", "con token ADMIN"):
+            assert stale not in description, (path, method, stale)

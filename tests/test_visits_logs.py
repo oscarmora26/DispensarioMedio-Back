@@ -1,4 +1,7 @@
-"""Logs de FEAT-013 (CA-34, regla 37): eventos sin datos clinicos ni personales."""
+"""Logs de FEAT-013 (CA-34, regla 37): eventos sin datos clinicos ni personales.
+
+El actor de los tres eventos es el medico dueño de la visita (FEAT-019).
+"""
 
 from __future__ import annotations
 
@@ -11,10 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from tests.db_support import unique_suffix
 from tests.visits_support import (
     VISITS_PATH,
-    admin_actor,
     annul_path,
     create_medication_row,
     doctor_row,
+    medico_actor,
     past_visited_at,
     patient_row,
     visit_body,
@@ -37,9 +40,9 @@ async def test_ca34_events_carry_ids_and_never_leak_clinical_texts(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """CA-34: `visit.created/updated/annulled` con ids y sin sintomas ni motivo."""
-    actor_id, headers = await admin_actor(db_conn)
     tag = unique_suffix()
-    doctor_id = await doctor_row(db_conn, name=f"Dr. Confidencial {tag}")
+    owner_doctor_id = await doctor_row(db_conn, name=f"Dr. Confidencial {tag}")
+    actor_id, headers = await medico_actor(db_conn, doctor_id=owner_doctor_id)
     patient_id = await patient_row(db_conn, name=f"Paciente Confidencial {tag}")
     medication_id = await create_medication_row(db_conn, description=f"Medicina {tag}")
 
@@ -53,7 +56,7 @@ async def test_ca34_events_carry_ids_and_never_leak_clinical_texts(
         VISITS_PATH,
         headers=headers,
         json=visit_body(
-            doctor_id=doctor_id,
+            doctor_id=None,
             patient_id=patient_id,
             symptoms=symptoms,
             recommendations=recommendations,
@@ -67,7 +70,7 @@ async def test_ca34_events_carry_ids_and_never_leak_clinical_texts(
         visit_path(visit_id),
         headers=headers,
         json=visit_body(
-            doctor_id=doctor_id,
+            doctor_id=None,
             patient_id=patient_id,
             visited_at=past_visited_at(),
             symptoms=updated_symptoms,
