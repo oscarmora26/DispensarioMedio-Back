@@ -8,6 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from tests.auth_support import auth_headers, cached_password_hash, create_auth_user, token_for
 from tests.db_support import unique_suffix
 from tests.shelves_support import (
+    CELL_KEYS,
+    ITEM_KEYS,
+    SHELF_NOT_FOUND_DETAIL,
     SHELVES_PATH,
     admin_actor,
     assert_error_envelope,
@@ -40,15 +43,9 @@ async def test_r4_medico_reads_but_never_writes(
 
     detail = await auth_client.get(shelf_path(active_id), headers=medico_headers)
     assert detail.status_code == 200, detail.text
-    assert set(detail.json()) == {
-        "id",
-        "name",
-        "description",
-        "is_active",
-        "created_at",
-        "updated_at",
-        "cells",
-    }
+    assert set(detail.json()) == ITEM_KEYS
+    for cell in detail.json()["cells"]:
+        assert set(cell) == CELL_KEYS
 
     responses = [
         await auth_client.post(SHELVES_PATH, headers=medico_headers, json=shelf_body(write_tag)),
@@ -135,5 +132,5 @@ async def test_detail_of_missing_shelf_is_404_with_exact_envelope(
 
     response = await auth_client.get(shelf_path(missing_id), headers=headers)
     body = assert_error_envelope(response, 404, "shelf_not_found")
-    assert body["detail"] == "El estante no encontrado"
+    assert body["detail"] == SHELF_NOT_FOUND_DETAIL
     assert body["errors"] == []

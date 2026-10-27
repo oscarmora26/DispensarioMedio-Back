@@ -1,4 +1,4 @@
-"""Endpoints de estantes (shelves) y celdas (cells)."""
+"""Endpoints de estantes (shelves)."""
 
 from __future__ import annotations
 
@@ -8,71 +8,116 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_role
-from app.core.exceptions import AppError
 from app.db.session import get_session
 from app.models.user import User
-from app.schemas.shelf import ShelfCreate, ShelfListResponse, ShelfRead, ShelfUpdate
+from app.schemas.shelf import (
+    ShelfCreate,
+    ShelfListResponse,
+    ShelfRead,
+    ShelfUpdate,
+)
 from app.services import shelf_service
-from app.services.shelf_service import calculate_pages
-
-ReaderUser = Annotated[User, Depends(require_role("ADMIN", "MEDICO"))]
-WriterUser = Annotated[User, Depends(require_role("ADMIN"))]
 
 router = APIRouter(prefix="/shelves", tags=["shelves"])
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+ReaderUser = Annotated[User, Depends(require_role("ADMIN", "MEDICO"))]
+WriterUser = Annotated[User, Depends(require_role("ADMIN"))]
+
+SORT_PATTERN = r"^-?(?:name|created_at|is_active|id)$"
 
 
-def _handle(exc: AppError):
-    raise exc
-
-
-@router.get("", response_model=ShelfListResponse)
+@router.get(
+    "",
+    response_model=ShelfListResponse,
+    summary="Listar estantes",
+    description=(
+        "Lista estantes con sus celdas anidadas, con paginacion, busqueda "
+        "case-insensitive e insensible a acentos sobre name y description, "
+        "filtro opcional por estado y orden por el catalogo permitido. "
+        "Accesible para ADMIN y MEDICO."
+    ),
+)
 async def list_shelves(
     session: SessionDep,
     _actor: ReaderUser,
-    page: Annotated[int, Query(ge=1)] = 1,
-    size: Annotated[int, Query(ge=1, le=100)] = 20,
-    search: Annotated[str | None, Query(max_length=100)] = None,
-    is_active: Annotated[bool | None, Query()] = None,
-    sort: Annotated[str, Query()] = "name",
+    page: Annotated[int, Query(ge=1, description="Pagina, desde 1")] = 1,
+    size: Annotated[int, Query(ge=1, le=100, description="Elementos por pagina")] = 20,
+    search: Annotated[
+        str | None,
+        Query(max_length=100, description="Busqueda parcial en name y description"),
+    ] = None,
+    is_active: Annotated[bool | None, Query(description="Filtra por estado")] = None,
+    sort: Annotated[
+        str,
+        Query(
+            pattern=SORT_PATTERN,
+            description="name, created_at, is_active o id; prefijo '-' descendente",
+        ),
+    ] = "name",
 ) -> ShelfListResponse:
-    shelves, total = await shelf_service.list_shelves(
+    """Lista estantes con sus celdas anidadas."""
+    return await shelf_service.list_shelves(
         session, page=page, size=size, search=search, is_active=is_active, sort=sort
     )
-    pages = calculate_pages(total, size)
-    return ShelfListResponse(
-        items=[ShelfRead.model_validate(s) for s in shelves],
-        total=total,
-        page=page,
-        size=size,
-        pages=pages,
-    )
 
 
-@router.get("/{shelf_id}", response_model=ShelfRead)
+@router.get(
+    "/{shelf_id}",
+    response_model=ShelfRead,
+    summary="Detalle de estante",
+    description="Devuelve un estante con sus celdas. Accesible para ADMIN y MEDICO.",
+)
 async def get_shelf(shelf_id: int, session: SessionDep, _actor: ReaderUser) -> ShelfRead:
-    shelf = await shelf_service.get_shelf(session, shelf_id)
-    return ShelfRead.model_validate(shelf)
+    """Devuelve un estante con sus celdas."""
+    return await shelf_service.get_shelf(session, shelf_id)
 
 
-@router.post("", response_model=ShelfRead, status_code=status.HTTP_201_CREATED)
-async def create_shelf(payload: ShelfCreate, session: SessionDep, _actor: WriterUser) -> ShelfRead:
-    shelf = await shelf_service.create_shelf(session, payload)
+@router.post(
+    "",
+    response_model=ShelfRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Crear estante",
+    description=(
+        "Crea un estante con name unico (case-insensitive). Las celdas se crean "
+        "por POST /api/v1/cells. Solo accesible para ADMIN."
+    ),
+)
+async def create_shelf(payload: ShelfCreate, session: SessionDep, actor: WriterUser) -> ShelfRead:
+    """Crea un estante sin celdas."""
+    shelf = await shelf_service.create_shelf(session, payload, actor=actor)
     await session.commit()
-    return ShelfRead.model_validate(shelf)
+    return shelf
 
 
-@router.put("/{shelf_id}", response_model=ShelfRead)
+@router.put(
+    "/{shelf_id}",
+    response_model=ShelfRead,
+    summary="Reemplazar estante",
+    description=(
+        "Reemplazo completo de name, description e is_active. No modifica las "
+        "celdas: esas se gestionan por /api/v1/cells. Solo accesible para ADMIN."
+    ),
+)
 async def update_shelf(
-    shelf_id: int, payload: ShelfUpdate, session: SessionDep, _actor: WriterUser
+    shelf_id: int, payload: ShelfUpdate, session: SessionDep, actor: WriterUser
 ) -> ShelfRead:
-    shelf = await shelf_service.update_shelf(session, shelf_id, payload)
+    """Reemplaza los campos del estante."""
+    shelf = await shelf_service.update_shelf(session, shelf_id, payload, actor=actor)
     await session.commit()
-    return ShelfRead.model_validate(shelf)
+    return shelf
 
 
-@router.delete("/{shelf_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_shelf(shelf_id: int, session: SessionDep, _actor: WriterUser) -> None:
-    await shelf_service.delete_shelf(session, shelf_id)
+@router.delete(
+    "/{shelf_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Desactivar estante",
+    description=(
+        "Baja logica: desactiva el estante y todas sus celdas. Los registros no "
+        "se borran. Solo accesible para ADMIN."
+    ),
+)
+async def delete_shelf(shelf_id: int, session: SessionDep, actor: WriterUser) -> None:
+    """Desactiva el estante y sus celdas."""
+    await shelf_service.delete_shelf(session, shelf_id, actor=actor)
     await session.commit()

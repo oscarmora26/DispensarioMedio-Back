@@ -22,12 +22,12 @@ shelves (id, name, description, is_active, created_at, updated_at)
 - **R-3** `medications.location_id` conserva su nombre pero referencia `cells.id` (`ON DELETE RESTRICT`, NOT NULL).
 - **R-4** Lectura de `/shelves`: `ADMIN` y `MEDICO`. Escritura: solo `ADMIN`.
 - **R-5** Listado paginado con `search` (insensible a acentos sobre `name` y `description`), `is_active` y `sort`.
-- **R-6** `POST /shelves` crea estante y celdas en un solo body.
-- **R-7** `PUT /shelves/{id}` sincroniza celdas por `(section, cell)` case-insensitive: las existentes se actualizan **en el lugar conservando su `id`** (es la FK de `medications`), las nuevas se crean y las ausentes se eliminan.
-- **R-8** Una celda con medicamentos no se puede eliminar: `409 cell_has_medications`.
+- **R-6** La escritura esta separada por recurso: `POST/PUT /shelves` solo envian `{name, description, is_active}` y las celdas se crean y editan por `/cells` con su `shelf_id`. `GET /shelves` sigue devolviendo `cells` anidadas.
+- **R-7** `PUT /shelves/{id}` **no** toca las celdas: reemplaza solo los campos del estante. Las celdas se gestionan por `/cells`, donde `PUT /cells/{id}` acepta `shelf_id` y permite mover la celda de estante conservando su `id` (es la FK de `medications.cell_id`).
+- **R-8** `DELETE /cells/{id}` es baja logica; una celda con medicamentos no se desactiva: `409 cell_has_medications`. La posicion `(shelf_id, section, cell)` es unica sin distinguir mayusculas: `409 cell_position_exists`. Un `shelf_id` inexistente responde `404 shelf_not_found`.
 - **R-9** `DELETE /shelves/{id}` es baja logica: desactiva estante y sus celdas.
 - **R-10** `description` vacia o solo espacios se normaliza a `NULL`.
-- **R-11** Posiciones duplicadas en el payload (case-insensitive) => `422 validation_error` antes de tocar la base.
+- **R-11** Un `sort` fuera del catalogo responde `422` en ambos listados; el `search` se recorta antes de filtrar.
 - **R-12** Toda violacion de integridad no contemplada responde el envelope `{detail, code, errors}` (`409 integrity_error`), nunca un traceback; cualquier excepcion no controlada responde `500 internal_error` con el mismo envelope.
 
 ## Cambios
@@ -115,3 +115,56 @@ Aprobado por el humano tras confirmar que la columna apuntaba a `cells.id` con e
 - `uv run ruff check .` -> limpio
 - `uv run ruff format --check .` -> 223 archivos formateados
 - `uv run alembic check` (dev y test) -> sin operaciones nuevas
+
+## Separacion de la capa API (2026-10-27)
+
+Decision del humano: **escritura separada, lectura anidada**.
+
+| Recurso | Operaciones | Body |
+|---|---|---|
+| `/api/v1/shelves` | `GET ""`, `GET /{id}`, `POST ""`, `PUT /{id}`, `DELETE /{id}` | `{name, description, is_active}`; `cells` se rechaza con `422` |
+| `/api/v1/cells` | `GET ""`, `GET /{id}`, `POST ""`, `PUT /{id}`, `DELETE /{id}` | `{shelf_id, section, cell, description, is_active}` |
+
+- `GET /shelves` conserva `cells` anidadas; `PUT /shelves/{id}` ya no modifica celdas.
+- `POST/PUT /cells` validan estante existente (`404 shelf_not_found`) y unicidad de posicion dentro del estante (`409 cell_position_exists`, comparacion case-insensitive por `CITEXT`).
+- `PUT /cells/{id}` acepta `shelf_id`, por lo que permite mover una celda de estante sin perder su `id` ni los medicamentos asociados.
+- `DELETE /cells/{id}` bloquea con `409 cell_has_medications` cuando hay medicamentos y es idempotente en celdas ya inactivas.
+- Listado de celdas con `search` (seccion, celda y descripcion, insensible a acentos), filtros `is_active` y `shelf_id`, y `sort` validado.
+
+## Suite de tests migrada a la capa separada (2026-10-27)
+
+Los tests se reorganizaron por recurso, sin tocar codigo de produccion:
+
+| Archivo | Contenido |
+|---|---|
+| `tests/shelves_support.py` | helpers compartidos: `SHELVES_PATH`, `CELLS_PATH`, `shelf_body` (sin `cells`), `cell_body`, `cell_path`, `create_cell` (API), `create_cell_row` (SQL), `count_cells`, `nonexistent_cell_id`, mensajes exactos del envelope y `request_body_schema` |
+| `tests/test_shelves_crud.py` | `POST` sin celdas (`cells: []`), rechazo de `cells` con `422`, `PUT` que no toca las celdas existentes, `DELETE` en cascada logica e idempotencia |
+| `tests/test_shelves_authz.py` | R-4 de `/shelves`, matriz de autenticacion y `404 shelf_not_found` |
+| `tests/test_shelves_integrity.py` | `409 integrity_error`, envelope del catalogo y OpenAPI: `/shelves` ya no documenta `cells` en la escritura |
+| `tests/test_shelves_list.py` | paginacion, `search` recortado, `sort` validado con `422` y celdas anidadas por item |
+| `tests/test_shelves_unit.py` | schemas `Shelf*` (sin `cells`), `ShelfRead` con celdas anidadas, `escape_like` y `calculate_pages` |
+| `tests/test_cells_crud.py` | alta/detalle/reemplazo/baja de celdas: `"" -> null`, `409 cell_position_exists`, misma posicion en otro estante, `PUT` con `shelf_id` (mover), `404 cell_not_found`/`shelf_not_found` y `409 cell_has_medications` |
+| `tests/test_cells_authz.py` | lectura ADMIN/MEDICO, escritura solo ADMIN, matriz de autenticacion y `404 cell_not_found` |
+| `tests/test_cells_integrity.py` | `409 integrity_error`, envelope del catalogo y OpenAPI de `/api/v1/cells` (cinco operaciones, tag `cells`) |
+| `tests/test_cells_list.py` | paginacion, filtros `shelf_id`/`is_active`, `search` sin acentos en tres columnas y catalogo de `sort` |
+| `tests/test_cells_unit.py` | schemas `Cell*`, catalogo de `sort`, `escape_like` y `calculate_pages` |
+
+El resto de las suites no cambio: `tests/test_medications_*.py`, `tests/test_db_*.py`, `tests/test_db_catalog.py` y `tests/test_models_metadata.py` solo usan `cells` como nombre de tabla y `tests/test_search_unaccent.py` sigue usando `create_shelf_with_cells`, que ahora crea el estante y luego cada celda por SQL (el equivalente a `POST /cells`).
+
+### Defecto de produccion detectado (corregido)
+
+`PUT /api/v1/cells/{id}` responde **500** (`internal_error`) en toda actualizacion que llega al `flush()`.
+
+- Causa: `app/services/cell_service.py::update_cell` hace `await session.flush()` y luego `_to_read(cell)`. El `onupdate=func.now()` de `UpdatedAtMixin` deja `updated_at` expirado tras el `UPDATE`, y pydantic lo lee en contexto async ⇒ `MissingGreenlet` / `ValidationError` de `CellRead`.
+- `shelf_service.update_shelf` no sufre el problema porque relee la fila con `_get_or_404` despues del `flush()`.
+- Se reprodujo fuera del fixture de tests, con `SessionLocal` (sesion de produccion) contra la base de tests.
+- Tests que lo evidenciaban: `tests/test_cells_crud.py::test_put_replaces_all_fields_and_can_move_the_cell_to_another_shelf`, `::test_put_keeping_its_own_position_is_accepted`, `::test_put_preserves_created_at_and_reactivates`.
+- **Correccion**: `update_cell` relee la fila despues del `flush()` (`return _to_read(await _get_or_404(session, cell.id))`), mismo patron que `shelf_service.update_shelf`. Los tres tests pasan sin modificarlos.
+
+## Verificacion final (capa API separada)
+
+- `DATABASE_URL=...5434/dispensario_test uv run pytest -q` -> **730 passed**
+- `uv run ruff check .` -> limpio
+- `uv run ruff format --check .` -> 230 archivos formateados
+- `uv run alembic check` -> sin operaciones nuevas
+- Smoke por API: `POST /shelves` (201, `cells: []`), `POST /cells` (201, `description: null`), `GET /shelves/{id}` con celdas anidadas, `GET /cells?shelf_id=`, `409 cell_position_exists`, `404 shelf_not_found`, `409 cell_has_medications`, `PUT /cells/{id}` (200 con `updated_at` fresco), `PUT /shelves/{id}` sin tocar celdas.

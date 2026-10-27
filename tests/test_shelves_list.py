@@ -133,13 +133,15 @@ async def test_sort_catalog_direction_and_tiebreak(
     for ids in groups.values():
         assert ids == sorted(ids)
 
-    # Sin `sort` (y con un valor desconocido) el orden es `name ASC`.
+    # Sin `sort` el orden es `name ASC`.
     default = await _list(auth_client, headers, search=prefix, size=100)
     assert only(default, "name") == sorted(only(default, "name"))
-    unknown = await _list(auth_client, headers, search=prefix, sort="password_hash", size=100)
-    assert only(unknown, "name") == sorted(only(unknown, "name"))
-    unknown_desc = await _list(auth_client, headers, search=prefix, sort="-password_hash", size=100)
-    assert only(unknown_desc, "name") == sorted(only(unknown_desc, "name"), reverse=True)
+
+    # Un `sort` fuera del catálogo se rechaza con 422 en vez de caer a `name`.
+    for unknown in ("password_hash", "-password_hash", "cells"):
+        response = await auth_client.get(SHELVES_PATH, headers=headers, params={"sort": unknown})
+        assert response.status_code == 422, (unknown, response.text)
+        assert error_fields(response) == {"sort"}
 
 
 async def test_search_covers_name_and_description_case_insensitive_and_escapes_wildcards(
@@ -189,9 +191,11 @@ async def test_search_covers_name_and_description_case_insensitive_and_escapes_w
     backslash_body = await _list(auth_client, headers, search=f"b\\base {backslash_tag}")
     assert backslash_id in {item["id"] for item in backslash_body["items"]}
 
-    # `search` no se recorta: un término de solo espacios no coincide con nada.
+    # `search` se recorta antes de filtrar: un término de solo espacios no filtra nada.
     blank = await _list(auth_client, headers, search="   ")
-    assert blank["total"] == 0
+    unfiltered = await _list(auth_client, headers)
+    assert blank["total"] == unfiltered["total"]
+    assert blank["total"] > 0
 
     long_response = await auth_client.get(
         SHELVES_PATH, headers=headers, params={"search": "x" * 101}

@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1.routes import (
     auth,
     brands,
+    cells,
     doctors,
     drug_types,
     health,
@@ -28,3 +29,4 @@ api_router.include_router(doctors.router)
 api_router.include_router(visits.router)
 api_router.include_router(reports.router)
 api_router.include_router(shelves.router)
+api_router.include_router(cells.router)

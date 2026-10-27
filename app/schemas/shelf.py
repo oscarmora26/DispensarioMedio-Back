@@ -1,52 +1,56 @@
-"""Schemas del contrato de estantes (shelves) y celdas (cells) (FEAT-017)."""
+"""Schemas del contrato de estantes (shelves) y celdas (cells) (FEAT-017).
+
+La escritura esta separada por recurso: `/shelves` gestiona solo el estante y
+`/cells` gestiona la celda con su `shelf_id`. La lectura de un estante incluye
+sus celdas anidadas para que el cliente no tenga que componer la vista.
+"""
 
 from __future__ import annotations
 
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 CellDescription = Annotated[str | None, Field(default=None, max_length=200)]
 ShelfDescription = Annotated[str | None, Field(default=None, max_length=200)]
 
 
-def _reject_duplicate_positions(cells: list[CellCreate] | list[CellUpdate]) -> None:
-    """Impide dos celdas con la misma posicion en el mismo estante.
+def _strip(value: object) -> object:
+    """Recorta espacios de un campo de texto."""
+    return value.strip() if isinstance(value, str) else value
 
-    La comparacion es case-insensitive, igual que el `CITEXT` de la base y la
-    constraint `uq_cells_position`; sin esta validacion el cliente recibiria un
-    error de integridad en vez de un `422` con el campo culpable.
+
+class _CellPosition(BaseModel):
+    """Posicion de la celda dentro de un estante.
+
+    `section` y `cell` son `CITEXT` en la base: la unicidad de la posicion es
+    case-insensitive, por eso se recortan y comparan sin distinguir mayusculas.
     """
-    seen: set[tuple[str, str]] = set()
-    for index, item in enumerate(cells):
-        key = (item.section.strip().casefold(), item.cell.strip().casefold())
-        if key in seen:
-            raise ValueError(
-                f"cells.{index}: la posición '{item.section}/{item.cell}' está repetida"
-            )
-        seen.add(key)
-
-
-class CellCreate(BaseModel):
-    """Alta de celda dentro de un estante."""
 
     model_config = ConfigDict(extra="forbid")
 
     section: Annotated[str, Field(min_length=1, max_length=50)]
     cell: Annotated[str, Field(min_length=1, max_length=50)]
     description: CellDescription = None
+
+    @field_validator("section", "cell", mode="before")
+    @classmethod
+    def _strip_position(cls, value: object) -> object:
+        return _strip(value)
+
+
+class CellCreate(_CellPosition):
+    """Alta de celda en un estante existente."""
+
+    shelf_id: int = Field(ge=1, description="Identificador del estante")
     is_active: bool = True
 
 
-class CellUpdate(BaseModel):
-    """Reemplazo completo de una celda."""
+class CellUpdate(_CellPosition):
+    """Reemplazo completo de una celda; `shelf_id` permite moverla de estante."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    section: Annotated[str, Field(min_length=1, max_length=50)]
-    cell: Annotated[str, Field(min_length=1, max_length=50)]
-    description: CellDescription = None
+    shelf_id: int = Field(ge=1, description="Identificador del estante")
     is_active: bool
 
 
@@ -65,34 +69,44 @@ class CellRead(BaseModel):
     updated_at: datetime
 
 
+class CellListResponse(BaseModel):
+    """Pagina de celdas."""
+
+    items: list[CellRead]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+
 class ShelfCreate(BaseModel):
+    """Alta de estante; las celdas se crean por `/cells`."""
+
     model_config = ConfigDict(extra="forbid")
-    """Alta de estante con sus celdas."""
 
     name: Annotated[str, Field(min_length=2, max_length=100)]
     description: ShelfDescription = None
     is_active: bool = True
-    cells: list[CellCreate] = Field(default_factory=list)
 
-    @model_validator(mode="after")
-    def _validate_cells(self) -> ShelfCreate:
-        _reject_duplicate_positions(self.cells)
-        return self
+    @field_validator("name", mode="before")
+    @classmethod
+    def _strip_name(cls, value: object) -> object:
+        return _strip(value)
 
 
 class ShelfUpdate(BaseModel):
+    """Reemplazo completo del estante; no toca sus celdas."""
+
     model_config = ConfigDict(extra="forbid")
-    """Reemplazo completo de un estante con sincronizacion de celdas."""
 
     name: Annotated[str, Field(min_length=2, max_length=100)]
     description: ShelfDescription = None
     is_active: bool
-    cells: list[CellUpdate]
 
-    @model_validator(mode="after")
-    def _validate_cells(self) -> ShelfUpdate:
-        _reject_duplicate_positions(self.cells)
-        return self
+    @field_validator("name", mode="before")
+    @classmethod
+    def _strip_name(cls, value: object) -> object:
+        return _strip(value)
 
 
 class ShelfRead(BaseModel):
@@ -110,6 +124,8 @@ class ShelfRead(BaseModel):
 
 
 class ShelfListResponse(BaseModel):
+    """Pagina de estantes."""
+
     model_config = ConfigDict(from_attributes=True)
 
     items: list[ShelfRead]

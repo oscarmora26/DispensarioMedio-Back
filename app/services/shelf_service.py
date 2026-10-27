@@ -1,16 +1,38 @@
-"""Reglas de negocio para estantes (shelves) y celdas (cells)."""
+"""Reglas de negocio para estantes (shelves).
+
+La escritura de celdas vive en `cell_service`: un estante se gestiona con sus
+propios campos y sus celdas se crean, editan o desactivan por `/cells`.
+"""
 
 from __future__ import annotations
 
+import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.exceptions import ConflictError, NotFoundError
-from app.models.cell import Cell
 from app.models.shelf import Shelf
-from app.repositories import cell_repository, shelf_repository
-from app.schemas.shelf import ShelfCreate, ShelfUpdate
+from app.models.user import User
+from app.repositories import shelf_repository
+from app.schemas.shelf import ShelfCreate, ShelfListResponse, ShelfRead, ShelfUpdate
+
+logger = structlog.get_logger(__name__)
 
 SHELF_EXISTS_MESSAGE = "El estante ya existe"
-SHELF_NOT_FOUND_MESSAGE = "El estante no encontrado"
-CELL_HAS_MEDICATIONS_MESSAGE = "La celda tiene medicamentos asociados"
+SHELF_NOT_FOUND_MESSAGE = "El estante no existe"
+
+SORT_FIELDS = ("name", "created_at", "is_active", "id")
+
+
+def calculate_pages(total: int, size: int) -> int:
+    """Cantidad de paginas para un total y tamano de pagina dados."""
+    return (total + size - 1) // size if total else 0
+
+
+def parse_sort(sort: str) -> tuple[str, bool]:
+    """Traduce `campo` o `-campo` en `(campo, descendente)`."""
+    sort_desc = sort.startswith("-")
+    field = sort.removeprefix("-")
+    return field, sort_desc
 
 
 def _normalize_description(value: str | None) -> str | None:
@@ -21,79 +43,72 @@ def _normalize_description(value: str | None) -> str | None:
     return stripped or None
 
 
-def _position_key(section: str, cell: str) -> tuple[str, str]:
-    """Clave de posicion case-insensitive (`CITEXT`)."""
-    return (section.strip().casefold(), cell.strip().casefold())
+def _to_read(shelf: Shelf) -> ShelfRead:
+    return ShelfRead.model_validate(shelf)
 
 
-def calculate_pages(total: int, size: int) -> int:
-    return (total + size - 1) // size if total else 0
-
-
-async def list_shelves(session, *, page, size, search, is_active, sort):
-    sort_field, sort_desc = _parse_sort(sort)
-    shelves, total = await shelf_repository.list_shelves(
-        session,
-        page=page,
-        size=size,
-        search=search,
-        is_active=is_active,
-        sort_field=sort_field,
-        sort_desc=sort_desc,
-    )
-    return shelves, total
-
-
-def _parse_sort(sort: str) -> tuple[str, bool]:
-    sort_desc = sort.startswith("-")
-    field = sort.lstrip("-")
-    allowed = {"name", "created_at", "is_active", "id"}
-    if field not in allowed:
-        field = "name"
-    return field, sort_desc
-
-
-async def get_shelf(session, shelf_id: int) -> Shelf:
+async def _get_or_404(session: AsyncSession, shelf_id: int) -> Shelf:
     shelf = await shelf_repository.get_shelf_by_id(session, shelf_id)
     if shelf is None:
         raise NotFoundError(SHELF_NOT_FOUND_MESSAGE, code="shelf_not_found")
     return shelf
 
 
-async def create_shelf(session, payload: ShelfCreate) -> Shelf:
-    existing = await shelf_repository.find_shelf_by_name(session, payload.name)
-    if existing is not None:
+async def list_shelves(
+    session: AsyncSession,
+    *,
+    page: int,
+    size: int,
+    search: str | None = None,
+    is_active: bool | None = None,
+    sort: str = "name",
+) -> ShelfListResponse:
+    """Lista estantes con sus celdas anidadas, con paginacion y filtros."""
+    sort_field, sort_desc = parse_sort(sort)
+    shelves, total = await shelf_repository.list_shelves(
+        session,
+        page=page,
+        size=size,
+        search=search.strip() if search else None,
+        is_active=is_active,
+        sort_field=sort_field,
+        sort_desc=sort_desc,
+    )
+    return ShelfListResponse(
+        items=[_to_read(shelf) for shelf in shelves],
+        total=total,
+        page=page,
+        size=size,
+        pages=calculate_pages(total, size),
+    )
+
+
+async def get_shelf(session: AsyncSession, shelf_id: int) -> ShelfRead:
+    """Devuelve un estante con sus celdas por identificador."""
+    return _to_read(await _get_or_404(session, shelf_id))
+
+
+async def create_shelf(session: AsyncSession, payload: ShelfCreate, *, actor: User) -> ShelfRead:
+    """Crea un estante sin celdas."""
+    if await shelf_repository.find_shelf_by_name(session, payload.name) is not None:
         raise ConflictError(SHELF_EXISTS_MESSAGE, code="shelf_exists")
+
     shelf = Shelf(
         name=payload.name,
         description=_normalize_description(payload.description),
         is_active=payload.is_active,
     )
-    for item in payload.cells:
-        shelf.cells.append(
-            Cell(
-                section=item.section.strip(),
-                cell=item.cell.strip(),
-                description=_normalize_description(item.description),
-                is_active=item.is_active,
-            )
-        )
     session.add(shelf)
     await session.flush()
-    return await shelf_repository.get_shelf_by_id(session, shelf.id)
+    logger.info("shelf.created", shelf_id=shelf.id, actor_id=actor.id)
+    return _to_read(await _get_or_404(session, shelf.id))
 
 
-async def update_shelf(session, shelf_id: int, payload: ShelfUpdate) -> Shelf:
-    """Actualiza el estante y sincroniza sus celdas por posicion.
-
-    Las celdas se emparejan por `(section, cell)` sin distinguir mayusculas: las
-    existentes se actualizan en el lugar (conservando su `id`, que es la FK de
-    `medications.cell_id`), las nuevas se crean y las ausentes se eliminan.
-    Una celda con medicamentos no se elimina: responde `409 cell_has_medications`.
-    """
-    shelf = await shelf_repository.get_shelf_by_id(session, shelf_id)
-    if shelf is None:
-        raise NotFoundError(SHELF_NOT_FOUND_MESSAGE, code="shelf_not_found")
+async def update_shelf(
+    session: AsyncSession, shelf_id: int, payload: ShelfUpdate, *, actor: User
+) -> ShelfRead:
+    """Reemplaza los campos del estante; no modifica sus celdas."""
+    shelf = await _get_or_404(session, shelf_id)
 
     other = await shelf_repository.find_shelf_by_name(session, payload.name, exclude_id=shelf_id)
     if other is not None:
@@ -102,54 +117,20 @@ async def update_shelf(session, shelf_id: int, payload: ShelfUpdate) -> Shelf:
     shelf.name = payload.name
     shelf.description = _normalize_description(payload.description)
     shelf.is_active = payload.is_active
-
-    existing = {_position_key(c.section, c.cell): c for c in shelf.cells}
-    kept: set[tuple[str, str]] = set()
-
-    for item in payload.cells:
-        key = _position_key(item.section, item.cell)
-        kept.add(key)
-        current = existing.get(key)
-        if current is None:
-            session.add(
-                Cell(
-                    shelf_id=shelf.id,
-                    section=item.section.strip(),
-                    cell=item.cell.strip(),
-                    description=_normalize_description(item.description),
-                    is_active=item.is_active,
-                )
-            )
-            continue
-        current.description = _normalize_description(item.description)
-        current.is_active = item.is_active
-
-    for key, current in existing.items():
-        if key in kept:
-            continue
-        if await cell_repository.count_medications_by_cell(session, current.id) > 0:
-            raise ConflictError(
-                CELL_HAS_MEDICATIONS_MESSAGE,
-                code="cell_has_medications",
-                errors=[{"field": "cells", "message": CELL_HAS_MEDICATIONS_MESSAGE}],
-            )
-        await session.delete(current)
-
     await session.flush()
-    # La coleccion carga con `selectinload`; tras borrar/crear celdas hay que
-    # expirarla para que la respuesta refleje el estado real de la base y no
-    # instancias obsoletas del identity map.
-    session.expire(shelf, ["cells"])
-    return await shelf_repository.get_shelf_by_id(session, shelf.id)
+    logger.info("shelf.updated", shelf_id=shelf.id, actor_id=actor.id)
+    return _to_read(await _get_or_404(session, shelf.id))
 
 
-async def delete_shelf(session, shelf_id: int) -> Shelf:
-    """Desactiva el estante y todas sus celdas (baja logica)."""
-    shelf = await shelf_repository.get_shelf_by_id(session, shelf_id)
-    if shelf is None:
-        raise NotFoundError(SHELF_NOT_FOUND_MESSAGE, code="shelf_not_found")
+async def delete_shelf(session: AsyncSession, shelf_id: int, *, actor: User) -> None:
+    """Baja logica del estante: lo desactiva junto con todas sus celdas."""
+    shelf = await _get_or_404(session, shelf_id)
+
+    if not shelf.is_active:
+        return
+
     shelf.is_active = False
     for item in shelf.cells:
         item.is_active = False
     await session.flush()
-    return shelf
+    logger.info("shelf.deactivated", shelf_id=shelf.id, actor_id=actor.id)

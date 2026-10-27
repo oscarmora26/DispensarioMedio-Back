@@ -1,24 +1,25 @@
-"""Utilidades de apoyo para los tests de FEAT-017 (estantes y celdas)."""
+"""Utilidades de apoyo para los tests de FEAT-017 (estantes y celdas).
+
+La escritura esta separada por recurso: `/shelves` gestiona el estante y
+`/cells` gestiona la celda con su `shelf_id`. `GET /shelves` sigue devolviendo
+las celdas anidadas, por eso `ITEM_KEYS` las incluye.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
-from httpx import Response
+from httpx import AsyncClient, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from tests.auth_support import auth_headers, cached_password_hash, create_auth_user, token_for
-from tests.db_support import (
-    create_brand,
-    create_cell,
-    create_drug_type,
-    create_shelf,
-    unique_suffix,
-)
+from tests.db_support import create_brand, create_drug_type, create_shelf, unique_suffix
+from tests.db_support import create_cell as create_cell_row
 from tests.users_support import assert_error_envelope
 
 SHELVES_PATH = "/api/v1/shelves"
+CELLS_PATH = "/api/v1/cells"
 
 #: Claves exactas de `ShelfRead` (FEAT-017).
 ITEM_KEYS = {"id", "name", "description", "is_active", "created_at", "updated_at", "cells"}
@@ -38,15 +39,28 @@ CELL_KEYS = {
 #: Claves del contrato anterior que ya no deben aparecer.
 FORBIDDEN_KEYS = {"cell_id", "shelf", "section_cell"}
 
+#: Mensajes de negocio exactos que el envelope devuelve como `detail`.
+SHELF_EXISTS_DETAIL = "El estante ya existe"
+SHELF_NOT_FOUND_DETAIL = "El estante no existe"
+CELL_NOT_FOUND_DETAIL = "La celda no existe"
+CELL_POSITION_EXISTS_DETAIL = "Ya existe una celda en esa posición del estante"
+CELL_HAS_MEDICATIONS_DETAIL = "La celda tiene medicamentos asociados"
+
 
 def shelf_path(shelf_id: int) -> str:
     """Ruta de detalle/actualización/desactivación de un estante."""
     return f"{SHELVES_PATH}/{shelf_id}"
 
 
+def cell_path(cell_id: int) -> str:
+    """Ruta de detalle/actualización/desactivación de una celda."""
+    return f"{CELLS_PATH}/{cell_id}"
+
+
 def cell_body(
     tag: str,
     *,
+    shelf_id: int,
     section: str | None = None,
     cell: str | None = None,
     description: str | None = None,
@@ -54,6 +68,7 @@ def cell_body(
 ) -> dict[str, Any]:
     """Body de una celda con posición única derivada de `tag`."""
     return {
+        "shelf_id": shelf_id,
         "section": section if section is not None else f"S-{tag}",
         "cell": cell if cell is not None else f"C-{tag}",
         "description": description,
@@ -67,15 +82,22 @@ def shelf_body(
     name: str | None = None,
     description: str | None = None,
     is_active: bool = True,
-    cells: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Body completo para `POST /shelves`; por defecto con una celda."""
+    """Body completo para `POST /shelves`; no incluye celdas (R-6)."""
     return {
         "name": name if name is not None else f"Estante {tag}",
         "description": description,
         "is_active": is_active,
-        "cells": cells if cells is not None else [cell_body(tag)],
     }
+
+
+def request_body_schema(spec: dict[str, Any], operation: dict[str, Any]) -> dict[str, Any]:
+    """Resuelve el schema JSON del `requestBody` de una operación del OpenAPI."""
+    content = operation["requestBody"]["content"]["application/json"]["schema"]
+    reference = content.get("$ref")
+    if reference is None:
+        return content
+    return spec["components"]["schemas"][reference.rsplit("/", 1)[-1]]
 
 
 async def admin_actor(conn: AsyncConnection) -> tuple[int, dict[str, str]]:
@@ -163,6 +185,39 @@ async def nonexistent_shelf_id(conn: AsyncConnection) -> int:
     return int(result.scalar_one())
 
 
+async def nonexistent_cell_id(conn: AsyncConnection) -> int:
+    """Devuelve un id que no existe en `cells`."""
+    result = await conn.execute(text("SELECT coalesce(max(id), 0) + 100000 FROM cells"))
+    return int(result.scalar_one())
+
+
+async def create_cell(
+    client: AsyncClient,
+    headers: dict[str, str],
+    *,
+    shelf_id: int,
+    tag: str | None = None,
+    section: str | None = None,
+    cell: str | None = None,
+    description: str | None = None,
+    is_active: bool = True,
+) -> Response:
+    """Crea una celda por `POST /cells` con una posición única derivada de `tag`."""
+    suffix = tag or unique_suffix()
+    return await client.post(
+        CELLS_PATH,
+        headers=headers,
+        json=cell_body(
+            suffix,
+            shelf_id=shelf_id,
+            section=section,
+            cell=cell,
+            description=description,
+            is_active=is_active,
+        ),
+    )
+
+
 async def create_shelf_with_cells(
     conn: AsyncConnection,
     *,
@@ -172,7 +227,11 @@ async def create_shelf_with_cells(
     is_active: bool = True,
     positions: tuple[tuple[str, str], ...] = (("S", "C"),),
 ) -> tuple[int, list[int]]:
-    """Inserta un estante con sus celdas por SQL directo y devuelve sus ids."""
+    """Inserta un estante con sus celdas por SQL directo y devuelve sus ids.
+
+    La escritura por API vive en `POST /cells`; este atajo usa la base para
+    preparar el estado de partida de los tests sin pasar por HTTP.
+    """
     suffix = tag or unique_suffix()
     shelf_id = await create_shelf(
         conn,
@@ -183,7 +242,7 @@ async def create_shelf_with_cells(
     cell_ids: list[int] = []
     for section, cell in positions:
         cell_ids.append(
-            await create_cell(
+            await create_cell_row(
                 conn,
                 shelf_id=shelf_id,
                 section=f"{section}-{suffix}",
@@ -235,16 +294,25 @@ def error_fields(response: Response) -> set[str]:
 
 
 __all__ = [
+    "CELLS_PATH",
+    "CELL_HAS_MEDICATIONS_DETAIL",
     "CELL_KEYS",
+    "CELL_NOT_FOUND_DETAIL",
+    "CELL_POSITION_EXISTS_DETAIL",
     "FORBIDDEN_KEYS",
     "ITEM_KEYS",
+    "SHELF_EXISTS_DETAIL",
+    "SHELF_NOT_FOUND_DETAIL",
     "SHELVES_PATH",
     "admin_actor",
     "assert_error_envelope",
     "cell_body",
+    "cell_path",
     "cell_positions",
     "count_cells",
     "count_shelves",
+    "create_cell",
+    "create_cell_row",
     "create_medication_for_cell",
     "create_shelf_with_cells",
     "error_fields",
@@ -252,7 +320,9 @@ __all__ = [
     "fetch_medication_cell",
     "fetch_shelf_row",
     "medico_actor",
+    "nonexistent_cell_id",
     "nonexistent_shelf_id",
+    "request_body_schema",
     "shelf_body",
     "shelf_path",
 ]

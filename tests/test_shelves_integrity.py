@@ -14,9 +14,11 @@ from tests.shelves_support import (
     SHELVES_PATH,
     admin_actor,
     assert_error_envelope,
+    create_cell,
     create_shelf_with_cells,
     medico_actor,
     nonexistent_shelf_id,
+    request_body_schema,
     shelf_body,
     shelf_path,
 )
@@ -186,27 +188,43 @@ def test_openapi_declares_the_shelves_contract() -> None:
             assert paths[path][verb]["tags"] == ["shelves"], (path, verb)
 
 
+def test_openapi_shelves_write_bodies_have_no_cells_field() -> None:
+    """R-6: `POST`/`PUT` de `/shelves` solo documentan `name`, `description` e `is_active`."""
+    spec = app.openapi()
+    paths = spec["paths"]
+
+    for path, verb in (("/api/v1/shelves", "post"), ("/api/v1/shelves/{shelf_id}", "put")):
+        schema = request_body_schema(spec, paths[path][verb])
+        assert set(schema["properties"]) == {"name", "description", "is_active"}, (path, verb)
+        assert "cells" not in schema["properties"], (path, verb)
+        assert schema.get("additionalProperties") is False, (path, verb)
+
+    # La lectura sí sigue documentando las celdas anidadas.
+    read_schema = spec["components"]["schemas"]["ShelfRead"]
+    assert "cells" in read_schema["properties"]
+
+
 async def test_shelf_with_cells_round_trip_keeps_foreign_keys_consistent(
     auth_client: AsyncClient, db_conn: AsyncConnection
 ) -> None:
-    """CA-1/CA-2: las celdas creadas por la API cuelgan del estante creado."""
+    """CA-1/CA-2: las celdas creadas por `/cells` cuelgan del estante creado."""
     _, headers = await admin_actor(db_conn)
     tag = unique_suffix()
 
-    created = await auth_client.post(
-        SHELVES_PATH,
-        headers=headers,
-        json=shelf_body(tag, cells=shelf_body(tag)["cells"]),
-    )
+    created = await auth_client.post(SHELVES_PATH, headers=headers, json=shelf_body(tag))
     assert created.status_code == 201, created.text
     shelf_id = created.json()["id"]
-    cell_id = created.json()["cells"][0]["id"]
+    assert created.json()["cells"] == []
+
+    cell_response = await create_cell(auth_client, headers, shelf_id=shelf_id, tag=tag)
+    assert cell_response.status_code == 201, cell_response.text
+    cell_id = cell_response.json()["id"]
 
     listed = await auth_client.get(
         SHELVES_PATH, headers=headers, params={"search": f"Estante {tag}", "size": 100}
     )
     item = next(entry for entry in listed.json()["items"] if entry["id"] == shelf_id)
-    assert item["cells"][0]["id"] == cell_id
+    assert [cell["id"] for cell in item["cells"]] == [cell_id]
     assert item["cells"][0]["shelf_id"] == shelf_id
 
     detail = await auth_client.get(shelf_path(shelf_id), headers=headers)
@@ -214,5 +232,8 @@ async def test_shelf_with_cells_round_trip_keeps_foreign_keys_consistent(
     assert detail.json() == item
 
     # Un estante sin celdas se puede crear y leer.
-    bare = await create_shelf_with_cells(db_conn, tag=unique_suffix(), positions=())
-    assert bare[1] == []
+    bare_id, bare_cells = await create_shelf_with_cells(db_conn, tag=unique_suffix(), positions=())
+    assert bare_cells == []
+    bare = await auth_client.get(shelf_path(bare_id), headers=headers)
+    assert bare.status_code == 200, bare.text
+    assert bare.json()["cells"] == []
